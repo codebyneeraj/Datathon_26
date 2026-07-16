@@ -1,0 +1,26 @@
+# Node
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.venv/
+**/venv/
+.ipynb_checkpoints/
+
+# DB
+**/*.db
+**/*.sqlite
+
+# Environment/Secrets
+**/.env
+**/.env.local
+
+# IDE
+.vscode/
+.idea/
+.gemini/
