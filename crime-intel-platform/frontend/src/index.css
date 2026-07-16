@@ -2,27 +2,34 @@
 
 :root {
   --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --bg-color: #0b0d13;
-  --card-bg: rgba(18, 22, 33, 0.75);
-  --card-border: rgba(255, 255, 255, 0.06);
-  --card-border-hover: rgba(255, 255, 255, 0.12);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
+  --bg-color: #090B10;
+  --surface-color: #11141B;
+  --card-bg: #171B24;
+  --card-border: #252A36;
+  --card-border-hover: #353b4d;
+  --text-primary: #F4F6F8;
+  --text-secondary: #98A2B3;
   --text-muted: #64748b;
   
-  --accent-red: #ff3366;
-  --accent-amber: #ffaa00;
-  --accent-green: #00cc66;
-  --accent-cyan: #00e5ff;
-  --accent-pink: #ec4899;
+  --accent-blue: #3b82f6;
+  --accent-red: #ef4444;
+  --accent-amber: #f59e0b;
+  --accent-green: #10b981;
+  --accent-cyan: #06b6d4;
+  --accent-pink: #3b82f6; /* Map pink to blue as alias to prevent breakage */
   
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
-  
-  --glow-red: 0 0 15px rgba(255, 51, 102, 0.4);
-  --glow-amber: 0 0 15px rgba(255, 170, 0, 0.4);
-  --glow-green: 0 0 15px rgba(0, 204, 102, 0.4);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Accessibility Focus States */
+button:focus-visible, 
+select:focus-visible, 
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent-blue) !important;
+  outline-offset: 2px !important;
 }
 
 * {
@@ -37,9 +44,6 @@ body {
   color: var(--text-primary);
   overflow-x: hidden;
   min-height: 100vh;
-  background-image: 
-    radial-gradient(circle at 10% 20%, rgba(236, 72, 153, 0.03) 0%, transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(0, 229, 255, 0.03) 0%, transparent 40%);
 }
 
 #root {
@@ -68,8 +72,8 @@ body {
 .app-container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  padding: 1.5rem;
+  gap: 1.25rem;
+  padding: 1.25rem;
   flex-grow: 1;
 }
 
@@ -77,12 +81,14 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 1rem;
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--card-border);
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .header-title-section h1 {
-  font-size: 1.75rem;
+  font-size: 1.6rem;
   font-weight: 700;
   letter-spacing: -0.025em;
   background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
@@ -95,94 +101,35 @@ body {
 
 .header-title-section p {
   color: var(--text-secondary);
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
 }
 
 /* KPI Summary Cards */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
 }
 
 .kpi-card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  border-radius: 12px;
-  padding: 1.25rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  border-radius: 10px;
   box-shadow: var(--shadow-sm);
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .kpi-card:hover {
   border-color: var(--card-border-hover);
-  transform: translateY(-2px);
-}
-
-.kpi-info h3 {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.kpi-info p {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin-top: 0.25rem;
-  font-feature-settings: "tnum";
-}
-
-.kpi-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.kpi-card.anomaly {
-  border-left: 3px solid var(--accent-red);
-}
-.kpi-card.anomaly .kpi-info p {
-  color: var(--accent-red);
-  text-shadow: 0 0 10px rgba(255, 51, 102, 0.2);
-}
-
-.kpi-card.hotspots {
-  border-left: 3px solid var(--accent-amber);
-}
-.kpi-card.hotspots .kpi-info p {
-  color: var(--accent-amber);
-}
-
-.kpi-card.solved {
-  border-left: 3px solid var(--accent-green);
-}
-.kpi-card.solved .kpi-info p {
-  color: var(--accent-green);
 }
 
 /* Dashboard Grid */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 1.5rem;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 1.25rem;
   align-items: stretch;
-}
-
-@media (max-width: 1200px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .dashboard-card {
@@ -190,8 +137,6 @@ body {
   border: 1px solid var(--card-border);
   border-radius: 16px;
   padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
   box-shadow: var(--shadow-md);
   backdrop-filter: blur(12px);
   transition: border-color 0.3s ease;
@@ -205,11 +150,10 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.25rem;
 }
 
 .card-title {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
@@ -223,9 +167,9 @@ body {
   margin-top: 0.15rem;
 }
 
-/* Leaflet Map Card Specifics */
+/* Map Card Specifics */
 .map-wrapper {
-  height: 500px;
+  height: 480px;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -236,6 +180,31 @@ body {
   height: 100%;
   width: 100%;
   background: #0f1115 !important;
+}
+
+/* Dark Mode Leaflet Popups Override */
+.leaflet-popup-content-wrapper, 
+.leaflet-popup-tip {
+  background: #141926 !important;
+  color: var(--text-primary) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border-radius: 8px !important;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px !important;
+  font-family: var(--font-family) !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--text-secondary) !important;
+  padding: 4px !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #fff !important;
+  background: transparent !important;
 }
 
 /* Custom pulsing marker */
@@ -254,7 +223,7 @@ body {
   }
   70% {
     transform: scale(1.1);
-    box-shadow: 0 0 0 15px rgba(255, 51, 102, 0);
+    box-shadow: 0 0 0 12px rgba(255, 51, 102, 0);
   }
   100% {
     transform: scale(0.7);
@@ -266,12 +235,12 @@ body {
 .right-column {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 /* Cytoscape Container */
 .cytoscape-wrapper {
-  height: 350px;
+  height: 330px;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -297,26 +266,25 @@ body {
 }
 
 .network-placeholder svg {
-  font-size: 2.5rem;
   margin-bottom: 0.75rem;
 }
 
 /* Recharts Customization */
 .chart-wrapper {
-  height: 250px;
+  height: 230px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* Custom select and control inputs */
+/* Custom inputs */
 .select-input {
-  background: #192030;
+  background: #161c28;
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
   padding: 0.4rem 0.8rem;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   outline: none;
   cursor: pointer;
   font-family: var(--font-family);
@@ -333,7 +301,7 @@ body {
 
 /* Audit Log Table */
 .audit-card {
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
 }
 
 .table-wrapper {
@@ -346,7 +314,7 @@ table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: 0.825rem;
 }
 
 th {
@@ -373,32 +341,26 @@ tr:hover td {
   color: var(--text-primary);
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
+/* Skeleton Loading Effects */
+.pulse {
+  animation: skeleton-pulse 1.5s infinite ease-in-out;
 }
 
-.badge.low {
-  background: rgba(0, 204, 102, 0.1);
-  color: var(--accent-green);
+@keyframes skeleton-pulse {
+  0% {
+    opacity: 0.35;
+    background-color: rgba(255, 255, 255, 0.02);
+  }
+  50% {
+    opacity: 0.75;
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+  100% {
+    opacity: 0.35;
+    background-color: rgba(255, 255, 255, 0.02);
+  }
 }
 
-.badge.medium {
-  background: rgba(255, 170, 0, 0.1);
-  color: var(--accent-amber);
-}
-
-.badge.high {
-  background: rgba(255, 51, 102, 0.1);
-  color: var(--accent-red);
-  box-shadow: 0 0 10px rgba(255, 51, 102, 0.05);
-}
-
-/* Node Info Sidebar or Overlays */
 .selection-details {
   background: rgba(10, 12, 18, 0.95);
   border: 1px solid var(--card-border);
@@ -408,7 +370,7 @@ tr:hover td {
 }
 
 .selection-details h4 {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -425,3 +387,234 @@ tr:hover td {
   font-weight: 500;
   color: var(--text-primary);
 }
+
+/* Breadcrumbs Styling */
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  list-style: none;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.breadcrumb-item button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.breadcrumb-item button:hover {
+  color: var(--accent-pink);
+}
+
+.breadcrumb-item.active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Responsive Media Breakpoints */
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 0.75rem;
+    gap: 1rem;
+  }
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .map-wrapper {
+    height: 380px;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Sidebar Layout Shell */
+.sidebar {
+  background-color: var(--surface-color);
+  border-right: 1px solid var(--card-border);
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 100;
+}
+
+.sidebar-logo-container {
+  padding: 1.5rem 1rem;
+  border-bottom: 1px solid var(--card-border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-menu {
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex-grow: 1;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: left;
+  width: 100%;
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-item:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.sidebar-item.active {
+  color: var(--accent-blue);
+  background-color: rgba(59, 130, 246, 0.05);
+  border-left-color: var(--accent-blue);
+}
+
+.sidebar-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sidebar-item.disabled:hover {
+  background-color: transparent;
+  color: var(--text-secondary);
+}
+
+.sidebar-toggle-btn {
+  padding: 1rem;
+  border-top: 1px solid var(--card-border);
+  background: transparent;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+  width: 100%;
+}
+
+.sidebar-toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+/* Leaflet Dark Theme Zoom Control Override */
+.leaflet-control-zoom {
+  border: 1px solid var(--card-border) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.leaflet-control-zoom-in, 
+.leaflet-control-zoom-out {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-bottom: 1px solid var(--card-border) !important;
+  transition: background-color 0.2s;
+}
+
+.leaflet-control-zoom-in:hover, 
+.leaflet-control-zoom-out:hover {
+  background-color: #272d3d !important;
+  color: #fff !important;
+}
+
+.leaflet-control-zoom-in.leaflet-disabled, 
+.leaflet-control-zoom-out.leaflet-disabled {
+  background-color: var(--bg-color) !important;
+  color: var(--text-muted) !important;
+}
+
+/* Map Floating Sidebar Details Panel */
+.map-sidebar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 280px;
+  max-height: calc(100% - 20px);
+  background: rgba(23, 27, 36, 0.95);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  padding: 14px;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  overflow-y: auto;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Fullscreen Network view container */
+.network-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  background-color: var(--bg-color) !important;
+  padding: 24px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.network-fullscreen .cytoscape-wrapper {
+  height: calc(100vh - 120px) !important;
+}
+

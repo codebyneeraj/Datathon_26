@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { Shield, AlertTriangle, AlertCircle, ZoomIn } from 'lucide-react';
+import Button from './ui/Button';
 
 // Fix leaflet marker icon issues
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -31,24 +33,32 @@ const DISTRICT_CENTROIDS = {
 const STATE_CENTER = [14.97, 75.92];
 const STATE_ZOOM = 7;
 
-// Helper component to change map viewport dynamically
 function ChangeMapView({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
     map.setView(center, zoom);
-  }, [center, zoom]);
+  }, [center, zoom, map]);
   return null;
 }
 
-const MapView = ({ activeDistrict, onSelectDistrict, onSelectOffender, riskScores }) => {
+const MapView = ({ 
+  activeDistrict, 
+  onSelectDistrict, 
+  onSelectOffender, 
+  riskScores, 
+  districtAccused, 
+  accusedLoading 
+}) => {
   const [mapCenter, setMapCenter] = useState(STATE_CENTER);
   const [mapZoom, setMapZoom] = useState(STATE_ZOOM);
   const [hotspots, setHotspots] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [hotspotsLoading, setHotspotsLoading] = useState(false);
+  const [selectedHotspot, setSelectedHotspot] = useState(null);
 
-  // Fetch hotspots when active district changes
+  // Fetch hotspots and reset active panel when active district changes
   useEffect(() => {
-    setLoading(true);
+    setSelectedHotspot(null);
+    setHotspotsLoading(true);
     let url = "http://localhost:8000/api/hotspots";
     if (activeDistrict) {
       url += `?district=${activeDistrict}`;
@@ -64,11 +74,11 @@ const MapView = ({ activeDistrict, onSelectDistrict, onSelectOffender, riskScore
       .then((res) => res.json())
       .then((data) => {
         setHotspots(data.features || []);
-        setLoading(false);
+        setHotspotsLoading(false);
       })
       .catch((err) => {
         console.error(err);
-        setLoading(false);
+        setHotspotsLoading(false);
       });
   }, [activeDistrict]);
 
@@ -84,7 +94,6 @@ const MapView = ({ activeDistrict, onSelectDistrict, onSelectOffender, riskScore
     return 'var(--accent-green)';
   };
 
-  // Create custom pulsing icon for anomalous districts
   const createPulseIcon = () => {
     return new L.DivIcon({
       className: 'pulse-marker',
@@ -95,40 +104,159 @@ const MapView = ({ activeDistrict, onSelectDistrict, onSelectOffender, riskScore
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Interactive Map</span>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '600' }}>
-            {activeDistrict ? `District: ${activeDistrict}` : "Karnataka State Crime Hotspots"}
-          </h3>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {activeDistrict && (
-            <button className="select-input" onClick={handleReset}>
-              Reset State View
-            </button>
-          )}
-          <select
-            className="select-input"
-            value={activeDistrict || ''}
-            onChange={(e) => onSelectDistrict(e.target.value || null)}
-          >
-            <option value="">-- All Districts --</option>
-            {Object.keys(DISTRICT_CENTROIDS).map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', height: '100%' }} role="region" aria-label="Geographical Crime Hotspots Map">
+      {/* Redesigned Compact Header - Removed stacking titles, kept only select and state buttons */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+        {activeDistrict && (
+          <Button variant="ghost" onClick={handleReset} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}>
+            State View
+          </Button>
+        )}
+        <select
+          className="select-input"
+          value={activeDistrict || ''}
+          onChange={(e) => onSelectDistrict(e.target.value || null)}
+          aria-label="Select Karnataka district to drill down"
+        >
+          <option value="">-- All Districts --</option>
+          {Object.keys(DISTRICT_CENTROIDS).map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className="map-wrapper" style={{ flexGrow: 1 }}>
+      <div className="map-wrapper" style={{ flexGrow: 1, position: 'relative' }}>
+        {hotspotsLoading && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, background: 'rgba(11, 13, 19, 0.7)', display: 'flex', alignItems: 'center', justifyBars: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem' }}>
+            <div className="pulse" style={{ padding: '1rem', background: 'var(--card-bg)', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
+              Querying crime hotspot matrices...
+            </div>
+          </div>
+        )}
+
+        {/* Floating details sidebar panel inside map wrapper (no overlay on anchor, Flaw 3) */}
+        {selectedHotspot && (
+          <div className="map-sidebar">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--card-border)', paddingBottom: '0.35rem', marginBottom: '0.35rem' }}>
+              <h4 style={{ color: 'var(--accent-amber)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem', fontWeight: '600' }}>
+                <AlertTriangle size={14} aria-hidden="true" /> Hotspot #{selectedHotspot.cluster_id + 1}
+              </h4>
+              <button 
+                onClick={() => setSelectedHotspot(null)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: '1', fontWeight: 'bold' }}
+                aria-label="Close details panel"
+              >
+                &times;
+              </button>
+            </div>
+            <div style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <p style={{ color: 'var(--text-secondary)' }}><strong>Total Incidents:</strong> {selectedHotspot.incident_count}</p>
+              <p style={{ color: 'var(--text-secondary)' }}><strong>Dominant Crime:</strong> {selectedHotspot.primary_crime}</p>
+              
+              <div style={{ margin: '0.25rem 0', background: 'rgba(255,255,255,0.02)', padding: '0.4rem', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <strong style={{ display: 'block', marginBottom: '0.2rem', color: 'var(--text-muted)' }}>Crime Matrix:</strong>
+                {Object.entries(selectedHotspot.crime_types).map(([type, cnt]) => (
+                  <div key={type} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '0.1rem' }}>
+                    <span>{type}:</span>
+                    <span style={{ fontWeight: 'bold', color: '#fff' }}>{cnt}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Accused regional queries */}
+              <div style={{ borderTop: '1px solid var(--card-border)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
+                <strong style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.35rem' }}>
+                  <Shield size={12} aria-hidden="true" style={{ color: 'var(--accent-amber)' }} /> Flagged Regional Accused:
+                </strong>
+                {accusedLoading ? (
+                  <div style={{ color: 'var(--text-muted)' }} className="pulse">Syncing records...</div>
+                ) : districtAccused.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)' }}>No local records flagged.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', maxHeight: '130px', overflowY: 'auto' }}>
+                    {districtAccused.slice(0, 4).map((acc) => (
+                      <button
+                        key={acc.id}
+                        style={{
+                          background: 'rgba(245, 158, 11, 0.05)',
+                          border: '1px solid rgba(245, 158, 11, 0.2)',
+                          color: 'var(--accent-amber)',
+                          fontSize: '10px',
+                          padding: '0.35rem 0.5rem',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          fontWeight: '600',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          transition: 'all 0.2s'
+                        }}
+                        onClick={() => onSelectOffender(acc.id, acc.name)}
+                      >
+                        <span>{acc.name}</span>
+                        <span style={{ opacity: 0.8, fontSize: '9px', background: 'rgba(255,255,255,0.08)', padding: '0.05rem 0.2rem', borderRadius: '2px' }}>
+                          Risk: {acc.risk_score}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Floating map legend panel (Flaw 5) */}
+        <div style={{
+          position: 'absolute',
+          bottom: '10px',
+          left: '10px',
+          background: 'rgba(23, 27, 36, 0.92)',
+          border: '1px solid var(--card-border)',
+          borderRadius: '6px',
+          padding: '8px 10px',
+          zIndex: 1000,
+          fontSize: '9px',
+          color: 'var(--text-primary)',
+          boxShadow: 'var(--shadow-sm)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          backdropFilter: 'blur(8px)'
+        }}>
+          <div style={{ fontWeight: '600', borderBottom: '1px solid var(--card-border)', paddingBottom: '2px', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Map Legend</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', border: '1.5px solid var(--accent-red)' }}></span>
+            <span>High Risk Zone (&gt;=70)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', border: '1.5px solid var(--accent-amber)' }}></span>
+            <span>Med Risk Zone (35-69)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', border: '1.5px solid var(--accent-green)' }}></span>
+            <span>Low Risk Zone (&lt;35)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-red)', opacity: 0.6 }}></span>
+            <span>Critical Hotspot (&gt;10 inc.)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-amber)', opacity: 0.6 }}></span>
+            <span>Active Hotspot (&lt;=10 inc.)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-red)', border: '1px solid #fff' }} className="pulse"></span>
+            <span>Spike Alert Center</span>
+          </div>
+        </div>
+        
         <MapContainer center={mapCenter} zoom={mapZoom} scrollWheelZoom={true}>
           <ChangeMapView center={mapCenter} zoom={mapZoom} />
           
-          {/* CartoDB Dark Matter tiles */}
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -137,32 +265,36 @@ const MapView = ({ activeDistrict, onSelectDistrict, onSelectOffender, riskScore
           {/* 1. Render District Anchors (Only in State View) */}
           {!activeDistrict &&
             Object.entries(DISTRICT_CENTROIDS).map(([name, config]) => {
-              const hasAnomaly = riskScores?.find(r => r.district === name)?.anomaly_spike;
+              const rScore = riskScores?.find(r => r.district === name);
+              const hasAnomaly = rScore?.anomaly_spike;
               return (
                 <React.Fragment key={name}>
-                  {/* Pulsing anomaly ring if flagged */}
                   {hasAnomaly && (
                     <Marker position={config.center} icon={createPulseIcon()}>
-                      <Popup>
-                        <div style={{ color: '#000', fontSize: '12px' }}>
-                          <h4 style={{ color: 'var(--accent-red)', fontWeight: 'bold' }}>ANOMALY ALERT</h4>
-                          <p><strong>{name}</strong> experienced a sharp crime spike in Burglary incidents during Oct 2025.</p>
-                          <button 
-                            className="select-input" 
-                            style={{ marginTop: '0.5rem', background: 'var(--accent-red)', border: 'none', color: '#fff', padding: '0.3rem 0.5rem', borderRadius: '4px', cursor: 'pointer' }}
+                      {/* Leaflet popups with offset so the anchor point stays visible */}
+                      <Popup offset={[0, -10]} autoPanPadding={[50, 50]}>
+                        <div style={{ color: '#fff', fontSize: '11px', width: '200px' }}>
+                          <h4 style={{ color: 'var(--accent-red)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.25rem', marginBottom: '0.35rem' }}>
+                            <AlertCircle size={14} aria-hidden="true" /> STATISTICAL SPIKE ALERT
+                          </h4>
+                          <p style={{ color: 'var(--text-secondary)' }}>
+                            <strong>{name}</strong> experienced a sharp <strong>{rScore.spike_percentage}% Burglary spike</strong> during Oct 2025.
+                          </p>
+                          <Button 
+                            variant="danger" 
+                            style={{ marginTop: '0.6rem', width: '100%', justifyContent: 'center' }}
                             onClick={() => onSelectDistrict(name)}
                           >
-                            Drill Down
-                          </button>
+                            <ZoomIn size={12} aria-hidden="true" /> Drill Down
+                          </Button>
                         </div>
                       </Popup>
                     </Marker>
                   )}
 
-                  {/* Standard District boundary indicator */}
                   <Circle
                     center={config.center}
-                    radius={22000} // ~22km radius for district representation
+                    radius={22000}
                     pathOptions={{
                       color: getDistrictRiskColor(name),
                       fillColor: getDistrictRiskColor(name),
@@ -173,15 +305,15 @@ const MapView = ({ activeDistrict, onSelectDistrict, onSelectOffender, riskScore
                       click: () => onSelectDistrict(name)
                     }}
                   >
-                    <Popup>
-                      <div style={{ color: '#000', fontSize: '11px' }}>
-                        <h4 style={{ margin: 0 }}>{name} District</h4>
-                        <p style={{ margin: '0.2rem 0' }}>
-                          Risk Score: <span style={{ fontWeight: 'bold', color: getDistrictRiskColor(name) }}>
-                            {riskScores?.find(r => r.district === name)?.predicted_risk_score || 'N/A'}/100
+                    <Popup offset={[0, 0]} autoPanPadding={[50, 50]}>
+                      <div style={{ color: '#fff', fontSize: '11px' }}>
+                        <h4 style={{ marginBottom: '0.25rem' }}>{name} District</h4>
+                        <p style={{ color: 'var(--text-secondary)' }}>
+                          Risk level: <span style={{ fontWeight: 'bold', color: getDistrictRiskColor(name) }}>
+                            {rScore?.risk_level || 'Low'} ({rScore?.predicted_risk_score || 0}/100)
                           </span>
                         </p>
-                        <p style={{ margin: 0 }}>Click to drill into station-level clusters.</p>
+                        <p style={{ marginTop: '0.35rem', color: 'var(--text-muted)' }}>Click zone to view station boundaries.</p>
                       </div>
                     </Popup>
                   </Circle>
@@ -193,12 +325,8 @@ const MapView = ({ activeDistrict, onSelectDistrict, onSelectOffender, riskScore
           {activeDistrict &&
             hotspots.map((feature, idx) => {
               const { coordinates } = feature.geometry;
-              const { cluster_id, incident_count, primary_crime, crime_types, radius } = feature.properties;
-              
-              // Leaflet uses [lat, lon], GeoJSON uses [lon, lat]
+              const { cluster_id, incident_count, radius } = feature.properties;
               const center = [coordinates[1], coordinates[0]];
-
-              // Size circles proportionally to incident count
               const circleRadius = Math.max(radius, 800); 
 
               return (
@@ -212,68 +340,13 @@ const MapView = ({ activeDistrict, onSelectDistrict, onSelectOffender, riskScore
                     fillOpacity: 0.25,
                     weight: 2
                   }}
-                >
-                  <Popup>
-                    <div style={{ color: '#000', fontSize: '11px', width: '220px' }}>
-                      <h4 style={{ color: 'var(--accent-red)', margin: '0 0 0.5rem 0' }}>
-                        DBSCAN Hotspot #{cluster_id}
-                      </h4>
-                      <p><strong>Total Incidents:</strong> {incident_count}</p>
-                      <p><strong>Primary Incident:</strong> {primary_crime}</p>
-                      
-                      <div style={{ margin: '0.5rem 0', borderTop: '1px solid #ddd', paddingTop: '0.25rem' }}>
-                        <strong style={{ display: 'block', marginBottom: '0.15rem' }}>Breakdown:</strong>
-                        {Object.entries(crime_types).map(([type, cnt]) => (
-                          <div key={type} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span>{type}:</span>
-                            <span style={{ fontWeight: 'bold' }}>{cnt}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Display Repeat Offender link if Bengaluru */}
-                      {activeDistrict === 'Bengaluru' && (
-                        <div style={{ borderTop: '1px solid #ddd', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
-                          <strong style={{ display: 'block', color: 'var(--accent-pink)', marginBottom: '0.25rem' }}>Flagged Repeat Offenders:</strong>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                            <button
-                              style={{
-                                background: '#121620',
-                                border: '1px solid #ec4899',
-                                color: '#ec4899',
-                                fontSize: '10px',
-                                padding: '0.25rem 0.5rem',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                                fontWeight: '500'
-                              }}
-                              onClick={() => onSelectOffender(1, "Ramesh Kumar (Gowda Gang)")}
-                            >
-                              Analyze Ramesh Kumar (Hub)
-                            </button>
-                            <button
-                              style={{
-                                background: '#121620',
-                                border: '1px solid #ec4899',
-                                color: '#ec4899',
-                                fontSize: '10px',
-                                padding: '0.25rem 0.5rem',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                                fontWeight: '500'
-                              }}
-                              onClick={() => onSelectOffender(2, "Suresh Naik (Field Coordinator)")}
-                            >
-                              Analyze Suresh Naik
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </Popup>
-                </Circle>
+                  eventHandlers={{
+                    click: () => {
+                      // Trigger selection of hotspot metrics into sliding details sidebar
+                      setSelectedHotspot(feature.properties);
+                    }
+                  }}
+                />
               );
             })}
         </MapContainer>

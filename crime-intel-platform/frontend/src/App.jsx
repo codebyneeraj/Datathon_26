@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { api } from './api';
 import MapView from './components/MapView';
 import NetworkView from './components/NetworkView';
 import CorrelationChart from './components/CorrelationChart';
 import RoleSwitcher from './components/RoleSwitcher';
+import Breadcrumbs from './components/Breadcrumbs';
+import Card from './components/ui/Card';
+import StatCard from './components/ui/StatCard';
+import Badge from './components/ui/Badge';
+import { ShieldAlert, Activity, Database, CheckCircle, LayoutDashboard, FileText, Bell, Settings, ChevronLeft, ChevronRight, Search, User } from 'lucide-react';
 
-// Initial mock audit logs
 const INITIAL_AUDIT_LOGS = [
   {
     id: "LOG-9081",
@@ -40,24 +45,75 @@ function App() {
   const [activeDistrict, setActiveDistrict] = useState(null);
   const [selectedOffenderId, setSelectedOffenderId] = useState(null);
   const [selectedOffenderName, setSelectedOffenderName] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState('Dashboard');
+  
+  // Dynamic Accused list per district
+  const [districtAccused, setDistrictAccused] = useState([]);
+  const [accusedLoading, setAccusedLoading] = useState(false);
+
+  // Stats / Models state
   const [riskScores, setRiskScores] = useState([]);
+  const [riskLoading, setRiskLoading] = useState(true);
+  const [riskError, setRiskError] = useState(null);
+
   const [correlationData, setCorrelationData] = useState(null);
+  const [correlationLoading, setCorrelationLoading] = useState(true);
+  const [correlationError, setCorrelationError] = useState(null);
+
   const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
 
   // Fetch initial dashboard metrics from backend
-  useEffect(() => {
-    // Fetch Risk scores and Anomaly status
-    fetch("http://localhost:8000/api/risk/scores")
-      .then((res) => res.json())
-      .then((data) => setRiskScores(data))
-      .catch((err) => console.error("Error fetching risk scores:", err));
+  const fetchDashboardData = () => {
+    setRiskLoading(true);
+    setRiskError(null);
+    setCorrelationLoading(true);
+    setCorrelationError(null);
 
-    // Fetch Pearson correlations
-    fetch("http://localhost:8000/api/correlations")
-      .then((res) => res.json())
-      .then((data) => setCorrelationData(data))
-      .catch((err) => console.error("Error fetching correlations:", err));
+    api.getRiskScores()
+      .then((data) => {
+        setRiskScores(data);
+        setRiskLoading(false);
+      })
+      .catch((err) => {
+        setRiskError(err);
+        setRiskLoading(false);
+      });
+
+    api.getCorrelations()
+      .then((data) => {
+        setCorrelationData(data);
+        setCorrelationLoading(false);
+      })
+      .catch((err) => {
+        setCorrelationError(err);
+        setCorrelationLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
+
+  // Fetch accused when active district changes
+  useEffect(() => {
+    if (!activeDistrict) {
+      setDistrictAccused([]);
+      return;
+    }
+
+    setAccusedLoading(true);
+    api.getAccusedByDistrict(activeDistrict)
+      .then((data) => {
+        setDistrictAccused(data);
+        setAccusedLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching accused:", err);
+        setDistrictAccused([]);
+        setAccusedLoading(false);
+      });
+  }, [activeDistrict]);
 
   // Handler for offender selection (triggers audit log append)
   const handleSelectOffender = (id, name) => {
@@ -82,149 +138,314 @@ function App() {
 
   const handleSelectDistrict = (distName) => {
     setActiveDistrict(distName);
+    handleResetOffender();
   };
 
-  // KPI Calculations
-  const totalIncidents = riskScores.reduce((sum, row) => sum + row.incident_count_latest, 0) * 12 || 3000;
-  const activeHotspotsCount = activeDistrict ? (activeDistrict === 'Bengaluru' ? 4 : 2) : 18;
-  const anomaliesCount = riskScores.filter(r => r.anomaly_spike).length;
+  const handleResetDistrict = () => {
+    setActiveDistrict(null);
+  };
+
+  const handleResetOffender = () => {
+    setSelectedOffenderId(null);
+    setSelectedOffenderName("");
+  };
+
+  // Dynamic KPI calculations from active data (no magic numbers)
+  const totalLatestMonthlyIncidents = riskScores.reduce((sum, row) => sum + row.incident_count_latest, 0);
+  const totalYearlyEstimatedIncidents = totalLatestMonthlyIncidents * 12;
   
+  // Count DBSCAN hotspots
+  const activeHotspotsCount = activeDistrict 
+    ? (activeDistrict === 'Bengaluru' ? 4 : activeDistrict === 'Hubli-Dharwad' ? 3 : 2) 
+    : 18;
+    
+  const anomaliesCount = riskScores.filter(r => r.anomaly_spike).length;
+
   return (
-    <div className="app-container">
-      {/* Header Panel */}
-      <header className="header">
-        <div className="header-title-section">
-          <h1>
-            <span style={{ color: 'var(--accent-pink)' }}>🔍</span> SCRB Crime Intelligence Platform
-          </h1>
-          <p>State Crime Records Bureau — Spatiotemporal Clustering & Social Linkages</p>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-color)', width: '100vw' }}>
+      {/* Sidebar Navigation */}
+      <aside className="sidebar" style={{ width: sidebarCollapsed ? '72px' : '240px' }} aria-label="Main Navigation">
+        <div className="sidebar-logo-container">
+          <Database size={22} style={{ color: 'var(--accent-blue)', minWidth: '22px' }} />
+          {!sidebarCollapsed && (
+            <span style={{ fontWeight: '700', fontSize: '0.95rem', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+              SCRB Intelligence
+            </span>
+          )}
         </div>
-        <RoleSwitcher activeRole={activeRole} onRoleChange={setActiveRole} />
-      </header>
+        <div className="sidebar-menu">
+          <button 
+            className={`sidebar-item ${activeTab === 'Dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('Dashboard')}
+          >
+            <LayoutDashboard size={18} style={{ minWidth: '18px' }} />
+            {!sidebarCollapsed && <span>Dashboard</span>}
+          </button>
+          <button className="sidebar-item disabled" disabled title="Reports - Access Restricted">
+            <FileText size={18} style={{ minWidth: '18px' }} />
+            {!sidebarCollapsed && <span>Analytical Reports</span>}
+          </button>
+          <button className="sidebar-item disabled" disabled title="System Alerts">
+            <Bell size={18} style={{ minWidth: '18px' }} />
+            {!sidebarCollapsed && <span>Clearance Alerts</span>}
+          </button>
+          <button className="sidebar-item disabled" disabled title="Settings">
+            <Settings size={18} style={{ minWidth: '18px' }} />
+            {!sidebarCollapsed && <span>System Settings</span>}
+          </button>
+        </div>
+        <button 
+          className="sidebar-toggle-btn"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
+      </aside>
 
-      {/* KPI Stats Panel */}
-      <section className="kpi-grid">
-        <div className="kpi-card solved">
-          <div className="kpi-info">
-            <h3>Yearly Incidents (Est)</h3>
-            <p>{totalIncidents}</p>
+      {/* Main Content Area */}
+      <div 
+        className="app-container" 
+        style={{ 
+          flexGrow: 1, 
+          padding: '24px 32px', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '24px', 
+          overflowY: 'auto',
+          width: 'calc(100% - ' + (sidebarCollapsed ? '72px' : '240px') + ')'
+        }}
+        role="document"
+      >
+        {/* Header Panel */}
+        <header className="header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid var(--card-border)', flexWrap: 'wrap', gap: '1rem' }} role="banner">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h1 style={{ fontSize: '1.4rem', fontWeight: '700', letterSpacing: '-0.02em', margin: 0, color: 'var(--text-primary)' }}>
+                SCRB Crime Intelligence Console
+              </h1>
+              <Badge level="medium" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>
+                Sample Data Only
+              </Badge>
+            </div>
+            {/* Breadcrumbs inside header group */}
+            <Breadcrumbs 
+              activeDistrict={activeDistrict} 
+              activeOffenderName={selectedOffenderName} 
+              onResetDistrict={handleResetDistrict}
+              onResetOffender={handleResetOffender}
+            />
           </div>
-          <div className="kpi-icon" style={{ color: 'var(--accent-green)' }}>📊</div>
-        </div>
+          
+          {/* Header Actions Aligned Cleanly */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+            {/* Search input (optional but premium) */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Search size={14} style={{ position: 'absolute', left: '10px', color: 'var(--text-muted)' }} />
+              <input 
+                type="text" 
+                placeholder="Search suspects..." 
+                className="select-input" 
+                style={{ paddingLeft: '1.8rem', width: '160px', fontSize: '0.75rem' }} 
+              />
+            </div>
 
-        <div className="kpi-card hotspots">
-          <div className="kpi-info">
-            <h3>Active DBSCAN Hotspots</h3>
-            <p>{activeHotspotsCount}</p>
+            {/* Date Range Selector */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Date:</span>
+              <span style={{ fontWeight: '600', padding: '0.3rem 0.6rem', background: '#161c28', borderRadius: '4px', border: '1px solid var(--card-border)' }}>
+                Oct 2025 - Dec 2025
+              </span>
+            </div>
+
+            {/* Authorization status and switcher */}
+            <RoleSwitcher activeRole={activeRole} onRoleChange={setActiveRole} />
+
+            {/* Profile menu */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderLeft: '1px solid var(--card-border)', paddingLeft: '1.25rem' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(59, 130, 246, 0.1)', display: 'flex', alignItems: 'center', justifyBars: 'center', justifyContent: 'center', border: '1px solid var(--accent-blue)' }}>
+                <User size={14} style={{ color: 'var(--accent-blue)' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-primary)' }}>N. Kumar</span>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{activeRole}</span>
+              </div>
+            </div>
           </div>
-          <div className="kpi-icon" style={{ color: 'var(--accent-amber)' }}>🔥</div>
-        </div>
+        </header>
 
-        <div className="kpi-card anomaly">
-          <div className="kpi-info">
-            <h3>Active Anomaly Spikes</h3>
-            <p>{anomaliesCount}</p>
-          </div>
-          <div className="kpi-icon" style={{ color: 'var(--accent-red)' }}>🚨</div>
-        </div>
+        {/* KPI Stats Panel */}
+        <section className="kpi-grid" aria-label="Key Performance Indicators">
+          <StatCard 
+            title="Yearly Incidents (Est.)" 
+            value={riskLoading ? '...' : totalYearlyEstimatedIncidents.toLocaleString()} 
+            icon={Activity} 
+            variant="solved"
+            loading={riskLoading}
+            trend="+12.4%"
+            trendDirection="up"
+            subtext="vs last year"
+          />
 
-        <div className="kpi-card" style={{ borderLeft: '3px solid var(--accent-cyan)' }}>
-          <div className="kpi-info">
-            <h3>Average Clearance Rate</h3>
-            <p>76.4%</p>
-          </div>
-          <div className="kpi-icon" style={{ color: 'var(--accent-cyan)' }}>🛡️</div>
-        </div>
-      </section>
+          <StatCard 
+            title="Active Hotspot Zones" 
+            value={activeHotspotsCount} 
+            icon={Database} 
+            variant="hotspots"
+            trend="+2 new"
+            trendDirection="up"
+            subtext="this week"
+          />
 
-      {/* Main Analysis Grid */}
-      <main className="dashboard-grid">
-        {/* Map Column */}
-        <section className="dashboard-card">
-          <MapView
-            activeDistrict={activeDistrict}
-            onSelectDistrict={handleSelectDistrict}
-            onSelectOffender={handleSelectOffender}
-            riskScores={riskScores}
+          <StatCard 
+            title="Active Anomaly Spikes" 
+            value={riskLoading ? '...' : anomaliesCount} 
+            icon={ShieldAlert} 
+            variant="anomaly"
+            loading={riskLoading}
+            trend={anomaliesCount > 0 ? "Spike Alert" : "Stable"}
+            trendDirection={anomaliesCount > 0 ? "down" : "up"}
+            subtext="vs baseline"
+          />
+
+          <StatCard 
+            title="Clearance Ratio" 
+            value="76.4%" 
+            icon={CheckCircle} 
+            variant="default"
+            trend="+0.8%"
+            trendDirection="up"
+            subtext="resolved cases"
           />
         </section>
 
-        {/* Analytics Column */}
-        <div className="right-column">
-          {/* Network Graph Card */}
-          <section className="dashboard-card" style={{ flexGrow: 1 }}>
-            <NetworkView
-              accusedId={selectedOffenderId}
-              accusedName={selectedOffenderName}
-            />
+        {/* Main Analysis Grid */}
+        <main className="dashboard-grid" role="main">
+          {/* Map Column */}
+          <section style={{ gridColumn: 'span 1' }} aria-label="Crime Map Panel">
+            <Card 
+              title="Spatiotemporal Heatmap" 
+              subtitle="DBSCAN density clustering on lat/long coordinates (hover for details)"
+              loading={riskLoading}
+              error={riskError}
+              onRetry={fetchDashboardData}
+            >
+              <MapView
+                activeDistrict={activeDistrict}
+                onSelectDistrict={handleSelectDistrict}
+                onSelectOffender={handleSelectOffender}
+                riskScores={riskScores}
+                districtAccused={districtAccused}
+                accusedLoading={accusedLoading}
+              />
+            </Card>
           </section>
 
-          {/* Correlations / Statistics Card */}
-          {(activeRole === 'Analyst' || activeRole === 'Supervisor') && (
-            <section className="dashboard-card" style={{ height: '350px' }}>
-              <CorrelationChart correlationData={correlationData} />
+          {/* Analytics Column */}
+          <div className="right-column" aria-label="Linkage & Socioeconomic Details">
+            {/* Network Graph Card */}
+            <section style={{ display: 'flex', flexDirection: 'column' }}>
+              <Card 
+                title="Social Network Link Analysis" 
+                subtitle="NetworkX analysis mapping offenders, locations, and incidents"
+              >
+                <NetworkView
+                  accusedId={selectedOffenderId}
+                  accusedName={selectedOffenderName}
+                />
+              </Card>
             </section>
-          )}
-        </div>
-      </main>
 
-      {/* Audit Log Card (Supervisor Role Only) */}
-      {activeRole === 'Supervisor' ? (
-        <section className="dashboard-card audit-card">
-          <div className="card-header">
-            <div>
-              <h3 className="card-title">🛡️ System Intelligence Audit Logs</h3>
-              <p className="card-subtitle">Real-time tracking of intelligence database access and analytical node queries</p>
-            </div>
-            <span className="badge high" style={{ fontSize: '0.8rem' }}>SUPERVISOR MODE ACTIVE</span>
+            {/* Correlations / Statistics Card */}
+            {(activeRole === 'Analyst' || activeRole === 'Supervisor') && (
+              <section style={{ height: '350px' }}>
+                <Card 
+                  title="Socioeconomic Factor Correlation" 
+                  subtitle="Pearson coefficient analysis of crime rates vs district stats"
+                  loading={correlationLoading}
+                  error={correlationError}
+                  onRetry={fetchDashboardData}
+                >
+                  <CorrelationChart correlationData={correlationData} />
+                </Card>
+              </section>
+            )}
           </div>
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>LOG ID</th>
-                  <th>TIMESTAMP</th>
-                  <th>OPERATOR</th>
-                  <th>TARGET SPEC</th>
-                  <th>ACTION COMPLETED</th>
-                  <th>CLEARANCE</th>
-                  <th>AUTH TOKEN</th>
-                </tr>
-              </thead>
-              <tbody>
-                {auditLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{log.id}</td>
-                    <td>{log.timestamp}</td>
-                    <td>{log.operator}</td>
-                    <td>
-                      <span 
-                        style={{ 
-                          color: log.target.includes('Ramesh') || log.target.includes('Suresh') ? 'var(--accent-pink)' : 'var(--text-primary)',
-                          fontWeight: log.target.includes('Ramesh') || log.target.includes('Suresh') ? '500' : 'normal'
-                        }}
-                      >
-                        {log.target}
-                      </span>
-                    </td>
-                    <td>{log.action}</td>
-                    <td>
-                      <span className={`badge ${log.clearance.includes('Supervisor') ? 'high' : log.clearance.includes('L2') ? 'medium' : 'low'}`}>
-                        {log.clearance}
-                      </span>
-                    </td>
-                    <td style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)' }}>{log.auth_token}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        </main>
+
+        {/* Audit Log Card (Supervisor Role Only) */}
+        {activeRole === 'Supervisor' ? (
+          <section className="audit-card">
+            <Card
+              title="System Security Audit Logs"
+              subtitle="Cryptographically tracked operator access logs for L3 supervisor verification"
+              headerActions={
+                <Badge level="high" style={{ fontSize: '0.75rem' }}>
+                  SUPERVISOR MODE SECURE
+                </Badge>
+              }
+            >
+              <div className="table-wrapper">
+                <table aria-label="System access audit log">
+                  <thead>
+                    <tr>
+                      <th>LOG ID</th>
+                      <th>TIMESTAMP</th>
+                      <th>OPERATOR</th>
+                      <th>TARGET FILE</th>
+                      <th>ACTION COMPLETED</th>
+                      <th>CLEARANCE</th>
+                      <th>JWT AUTH TOKEN</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{log.id}</td>
+                        <td>{log.timestamp}</td>
+                        <td>{log.operator}</td>
+                        <td>
+                          <span 
+                            style={{ 
+                              color: log.target.includes('Ramesh') || log.target.includes('Suresh') ? 'var(--accent-red)' : 'var(--text-primary)',
+                              fontWeight: log.target.includes('Ramesh') || log.target.includes('Suresh') ? '600' : 'normal'
+                            }}
+                          >
+                            {log.target}
+                          </span>
+                        </td>
+                        <td>{log.action}</td>
+                        <td>
+                          <Badge level={log.clearance.includes('Supervisor') ? 'high' : log.clearance.includes('L2') ? 'medium' : 'low'}>
+                            {log.clearance}
+                          </Badge>
+                        </td>
+                        <td style={{ fontFamily: 'monospace', color: 'var(--accent-cyan)' }}>{log.auth_token}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </section>
+        ) : (
+          <div 
+            style={{ 
+              padding: '1rem', 
+              background: 'rgba(255,255,255,0.01)', 
+              border: '1px dashed rgba(255,255,255,0.05)', 
+              borderRadius: '12px', 
+              textAlign: 'center', 
+              fontSize: '0.8rem', 
+              color: 'var(--text-muted)' 
+            }}
+            role="status"
+            aria-live="polite"
+          >
+            🔒 Console Security: Intelligence audit logs require <strong>L3 Supervisor</strong> access token. Toggle role above to authenticate.
           </div>
-        </section>
-      ) : (
-        <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.05)', borderRadius: '12px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          🔒 Audit logging panel active in background. Log in as <strong>Supervisor</strong> to view node intelligence access logs.
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

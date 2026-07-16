@@ -1,13 +1,14 @@
 import pandas as pd
 import numpy as np
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sklearn.ensemble import RandomForestClassifier
 from ..database import get_db
-from ..models import Incident, DistrictSocioeconomic
+from ..models import Incident, DistrictSocioeconomic, Accused
 
 router = APIRouter(prefix="/api/risk", tags=["risk"])
+
 
 @router.get("/scores")
 def get_risk_scores_api(db: Session = Depends(get_db)):
@@ -140,3 +141,63 @@ def get_risk_scores_api(db: Session = Depends(get_db)):
         })
         
     return results
+
+@router.get("/accused")
+def get_accused_api(
+    district: str = Query(..., description="District to query accused for"),
+    db: Session = Depends(get_db)
+):
+    # 1. Query all incident IDs in this district
+    incident_ids = [
+        r[0] for r in db.query(Incident.id).filter(Incident.district == district).all()
+    ]
+    
+    if not incident_ids:
+        return []
+
+    # 2. Query all accused
+    all_accused = db.query(Accused).all()
+    
+    # 3. Filter accused who have at least one past_incident_id in incident_ids
+    results = []
+    for acc in all_accused:
+        if not acc.past_incident_ids:
+            continue
+        try:
+            acc_inc_ids = {int(x.strip()) for x in acc.past_incident_ids.split(",") if x.strip()}
+        except ValueError:
+            continue
+            
+        if acc_inc_ids.intersection(incident_ids):
+            results.append({
+                "id": acc.id,
+                "name": acc.name,
+                "age": acc.age,
+                "gender": acc.gender,
+                "risk_score": acc.risk_score
+            })
+            
+    # Sort by risk_score descending to show top threats first
+    results.sort(key=lambda x: x["risk_score"], reverse=True)
+    return results
+
+@router.get("/stats")
+def get_stats_api(db: Session = Depends(get_db)):
+    # 1. Total incidents
+    total_count = db.query(Incident).count()
+    
+    # 2. Solved incidents count (Solved or Charge Sheeted)
+    solved_count = db.query(Incident).filter(Incident.status.in_(["Solved", "Charge Sheeted"])).count()
+    clearance_rate = round((solved_count / total_count) * 100, 1) if total_count > 0 else 0.0
+    
+    # 3. Anomalies count
+    risk_scores = get_risk_scores_api(db)
+    anomalies_count = sum(1 for r in risk_scores if r["anomaly_spike"])
+    
+    return {
+        "total_incidents": total_count,
+        "clearance_rate": clearance_rate,
+        "anomalies_count": anomalies_count
+      }
+
+

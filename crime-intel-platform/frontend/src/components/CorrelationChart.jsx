@@ -10,8 +10,7 @@ import {
   Cell,
   ReferenceLine,
   ScatterChart,
-  Scatter,
-  LabelList
+  Scatter
 } from 'recharts';
 
 const CorrelationChart = ({ correlationData }) => {
@@ -50,6 +49,21 @@ const CorrelationChart = ({ correlationData }) => {
     population: d.population
   }));
 
+  // Calculate domains dynamically based on data spread (Flaw 9)
+  const xValues = districtData.map(d => d.metricValue);
+  const xMin = Math.min(...xValues);
+  const xMax = Math.max(...xValues);
+  const xRange = xMax - xMin;
+  const xPadding = xRange * 0.05 || (metric === 'urbanization_index' ? 0.05 : 1);
+  const xDomain = [xMin - xPadding, xMax + xPadding];
+
+  const yValues = districtData.map(d => d.crimeRate);
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  const yRange = yMax - yMin;
+  const yPadding = yRange * 0.05 || 1;
+  const yDomain = [yMin - yPadding, yMax + yPadding];
+
   const getMetricLabel = () => {
     if (metric === 'unemployment_rate') return 'Unemployment Rate (%)';
     if (metric === 'urbanization_index') return 'Urbanization Index (0-1)';
@@ -77,7 +91,7 @@ const CorrelationChart = ({ correlationData }) => {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1rem', flexGrow: 1, minHeight: 230 }}>
         {/* Pearson Coefficient Chart */}
-        <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '10px', padding: '0.75rem', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '10px', padding: '0.75rem', display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '0.5rem', textAlign: 'center' }}>
             Pearson Correlation (r)
           </span>
@@ -88,14 +102,16 @@ const CorrelationChart = ({ correlationData }) => {
                 margin={{ top: 10, right: 10, left: -20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={10} />
+                {/* Added padding to prevent large empty borders on sides, Flaw 9 */}
+                <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={10} padding={{ left: 20, right: 20 }} />
                 <YAxis domain={[-1, 1]} stroke="var(--text-muted)" fontSize={10} />
                 <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
                 <Tooltip
                   contentStyle={{ background: '#121620', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '11px' }}
                   cursor={{ fill: 'rgba(255,255,255,0.02)' }}
                 />
-                <Bar dataKey="value" barSize={18}>
+                {/* Increased bar size for better proportions, Flaw 9 */}
+                <Bar dataKey="value" barSize={35}>
                   {coefficientsData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
@@ -106,7 +122,7 @@ const CorrelationChart = ({ correlationData }) => {
         </div>
 
         {/* Scatter Chart or Bar Chart showing Crime Rate vs Selected Metric */}
-        <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)', borderRadius: '10px', padding: '0.75rem', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '10px', padding: '0.75rem', display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '0.5rem', textAlign: 'center' }}>
             Crime Rate vs {getMetricLabel().split(' (')[0]}
           </span>
@@ -116,13 +132,15 @@ const CorrelationChart = ({ correlationData }) => {
                 margin={{ top: 10, right: 15, left: -20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                {/* Tight domain bounds and tickCount for matching gridlines, Flaw 9 */}
                 <XAxis
                   type="number"
                   dataKey="metricValue"
                   name={getMetricLabel().split(' (')[0]}
                   stroke="var(--text-muted)"
                   fontSize={10}
-                  domain={['auto', 'auto']}
+                  domain={xDomain}
+                  tickCount={6}
                 />
                 <YAxis
                   type="number"
@@ -130,6 +148,8 @@ const CorrelationChart = ({ correlationData }) => {
                   name="Crime Rate (per 100k)"
                   stroke="var(--text-muted)"
                   fontSize={10}
+                  domain={yDomain}
+                  tickCount={6}
                 />
                 <Tooltip
                   cursor={{ strokeDasharray: '3 3', stroke: 'rgba(255,255,255,0.1)' }}
@@ -139,7 +159,7 @@ const CorrelationChart = ({ correlationData }) => {
                       return (
                         <div style={{ background: '#121620', border: '1px solid rgba(255,255,255,0.1)', padding: '0.5rem', borderRadius: '6px', fontSize: '11px', color: '#fff' }}>
                           <p style={{ fontWeight: '600', marginBottom: '0.25rem' }}>{data.name}</p>
-                          <p>Crime Rate: <span style={{ color: 'var(--accent-pink)' }}>{data.crimeRate}</span></p>
+                          <p>Crime Rate: <span style={{ color: 'var(--accent-blue)', fontWeight: '600' }}>{data.crimeRate}</span></p>
                           <p>{getMetricLabel().split(' (')[0]}: <span>{data.metricValue}</span></p>
                         </div>
                       );
@@ -154,7 +174,8 @@ const CorrelationChart = ({ correlationData }) => {
                     return (
                       <Cell
                         key={`cell-${index}`}
-                        fill={entry.name === 'Hubli-Dharwad' ? 'var(--accent-red)' : entry.name === 'Bengaluru' ? 'var(--accent-pink)' : 'var(--accent-cyan)'}
+                        /* Replaced pink accent with blue for Bengaluru to avoid pink overloading, Flaw 7 */
+                        fill={entry.name === 'Hubli-Dharwad' ? 'var(--accent-red)' : entry.name === 'Bengaluru' ? 'var(--accent-blue)' : 'var(--accent-cyan)'}
                         radius={isHighlight ? 8 : 5}
                       />
                     );

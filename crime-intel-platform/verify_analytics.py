@@ -97,6 +97,29 @@ def run_tests():
     assert isinstance(correlations["literacy"], float)
     print("  => Correlation coefficients calculated successfully!")
     
+    # Test 6: Dynamic Offender Query by District
+    print("\n[Test 6/6] Verifying dynamic offender query by district...")
+    from app.routers.risk import get_accused_api
+    bengaluru_accused = get_accused_api("Bengaluru", db)
+    print(f"  Found {len(bengaluru_accused)} accused in Bengaluru.")
+    assert len(bengaluru_accused) > 0, "No accused found in Bengaluru!"
+    # Ensure Ramesh Kumar (ID 1) is in the list
+    ramesh_found = any(a["id"] == 1 for a in bengaluru_accused)
+    assert ramesh_found, "Ramesh Kumar was not found in Bengaluru accused list!"
+    print("  => Dynamic offender query works successfully!")
+    
+    # Test 7: Dynamic Stats Endpoint
+    print("\n[Test 7/7] Verifying dynamic stats calculation endpoint...")
+    from app.routers.risk import get_stats_api
+    stats = get_stats_api(db)
+    print(f"  Total incidents: {stats['total_incidents']}")
+    print(f"  Clearance rate: {stats['clearance_rate']}%")
+    print(f"  Anomalies count: {stats['anomalies_count']}")
+    assert stats["total_incidents"] == 3000, "Total incidents should be 3000!"
+    assert stats["clearance_rate"] > 0, "Clearance rate should be positive!"
+    assert stats["anomalies_count"] == 1, "Anomalies count should be 1 (Hubli-Dharwad)!"
+    print("  => Dynamic stats endpoint verified successfully!")
+    
     db.close()
     print("\n--------------------------------------------------")
     print("ALL INTELLIGENCE TESTS PASSED SUCCESSFULLY! [OK]")
