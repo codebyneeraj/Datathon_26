@@ -1,48 +1,105 @@
-from sqlalchemy import Column, Integer, String, Float, Date, Time, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from .database import Base
 
-class Incident(Base):
-    __tablename__ = "incidents"
+class District(Base):
+    __tablename__ = "districts"
+    DistrictID = Column(Integer, primary_key=True, index=True)
+    DistrictName = Column(String, index=True)
+    StateID = Column(Integer)
+    Active = Column(Integer)
 
-    id = Column(Integer, primary_key=True, index=True)
-    crime_type = Column(String, index=True)
-    date = Column(Date, index=True)
-    time = Column(Time)
-    lat = Column(Float)
-    long = Column(Float)
-    district = Column(String, index=True)
-    station = Column(String, index=True)
-    mo_tags = Column(String)  # Comma-separated tags
-    status = Column(String)
+    units = relationship("Unit", back_populates="district")
+    socioeconomic = relationship("DistrictSocioeconomic", back_populates="district", uselist=False)
 
-    victims = relationship("Victim", back_populates="incident", cascade="all, delete-orphan")
+class Unit(Base):
+    __tablename__ = "units"
+    UnitID = Column(Integer, primary_key=True, index=True)
+    UnitName = Column(String, index=True)
+    DistrictID = Column(Integer, ForeignKey("districts.DistrictID"))
+    StateID = Column(Integer)
+    Active = Column(Integer)
+
+    district = relationship("District", back_populates="units")
+    cases = relationship("CaseMaster", back_populates="unit")
+
+class CaseStatusMaster(Base):
+    __tablename__ = "case_status_master"
+    CaseStatusID = Column(Integer, primary_key=True, index=True)
+    CaseStatusName = Column(String, index=True)
+
+    cases = relationship("CaseMaster", back_populates="status_rel")
+
+class CrimeHead(Base):
+    __tablename__ = "crime_heads"
+    CrimeHeadID = Column(Integer, primary_key=True, index=True)
+    CrimeGroupName = Column(String, index=True)
+    Active = Column(Integer)
+
+    subheads = relationship("CrimeSubHead", back_populates="crime_head")
+    cases = relationship("CaseMaster", back_populates="major_head_rel")
+
+class CrimeSubHead(Base):
+    __tablename__ = "crime_sub_heads"
+    CrimeSubHeadID = Column(Integer, primary_key=True, index=True)
+    CrimeHeadID = Column(Integer, ForeignKey("crime_heads.CrimeHeadID"))
+    CrimeHeadName = Column(String, index=True)
+    SeqID = Column(Integer)
+
+    crime_head = relationship("CrimeHead", back_populates="subheads")
+    cases = relationship("CaseMaster", back_populates="minor_head_rel")
+
+class CaseMaster(Base):
+    __tablename__ = "case_master"
+    CaseMasterID = Column(Integer, primary_key=True, index=True)
+    CrimeNo = Column(String, index=True)
+    CaseNo = Column(String, index=True)
+    CrimeRegisteredDate = Column(String)
+    IncidentFromDate = Column(String)
+    PoliceStationID = Column(Integer, ForeignKey("units.UnitID"))
+    CaseStatusID = Column(Integer, ForeignKey("case_status_master.CaseStatusID"))
+    CrimeMajorHeadID = Column(Integer, ForeignKey("crime_heads.CrimeHeadID"))
+    CrimeMinorHeadID = Column(Integer, ForeignKey("crime_sub_heads.CrimeSubHeadID"))
+    latitude = Column(Float)
+    longitude = Column(Float)
+    BriefFacts = Column(String)
+    mo_tags = Column(String)
+
+    unit = relationship("Unit", back_populates="cases")
+    status_rel = relationship("CaseStatusMaster", back_populates="cases")
+    major_head_rel = relationship("CrimeHead", back_populates="cases")
+    minor_head_rel = relationship("CrimeSubHead", back_populates="cases")
+    accused = relationship("Accused", back_populates="case", cascade="all, delete-orphan")
+    victims = relationship("Victim", back_populates="case", cascade="all, delete-orphan")
 
 class Accused(Base):
     __tablename__ = "accused"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    age = Column(Integer)
-    gender = Column(String)
-    past_incident_ids = Column(String)  # Comma-separated list of incident IDs
+    AccusedMasterID = Column(Integer, primary_key=True, index=True)
+    CaseMasterID = Column(Integer, ForeignKey("case_master.CaseMasterID", ondelete="CASCADE"))
+    AccusedName = Column(String, index=True)
+    AgeYear = Column(Integer)
+    GenderID = Column(Integer)
+    PersonID = Column(String, index=True)
     risk_score = Column(Integer)
+
+    case = relationship("CaseMaster", back_populates="accused")
 
 class Victim(Base):
     __tablename__ = "victims"
+    VictimMasterID = Column(Integer, primary_key=True, index=True)
+    CaseMasterID = Column(Integer, ForeignKey("case_master.CaseMasterID", ondelete="CASCADE"))
+    VictimName = Column(String, index=True)
+    AgeYear = Column(Integer)
+    GenderID = Column(Integer)
 
-    id = Column(Integer, primary_key=True, index=True)
-    age = Column(Integer)
-    gender = Column(String)
-    incident_id = Column(Integer, ForeignKey("incidents.id", ondelete="CASCADE"))
-
-    incident = relationship("Incident", back_populates="victims")
+    case = relationship("CaseMaster", back_populates="victims")
 
 class DistrictSocioeconomic(Base):
     __tablename__ = "district_socioeconomic"
-
-    district = Column(String, primary_key=True, index=True)
+    DistrictID = Column(Integer, ForeignKey("districts.DistrictID"), primary_key=True)
     population = Column(Integer)
     unemployment_rate = Column(Float)
     urbanization_index = Column(Float)
     literacy_rate = Column(Float)
+
+    district = relationship("District", back_populates="socioeconomic")

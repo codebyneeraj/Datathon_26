@@ -1,5 +1,6 @@
 import React from 'react';
 import Button from './Button';
+import { AlertTriangle, FolderOpen } from 'lucide-react';
 
 const Card = ({
   title,
@@ -44,7 +45,7 @@ const Card = ({
           </div>
         ) : error ? (
           <div className="error-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '150px', padding: '1.5rem', textAlign: 'center', gap: '0.75rem' }}>
-            <span style={{ fontSize: '2rem' }}>⚠️</span>
+            <AlertTriangle size={28} style={{ color: 'var(--accent-red)', opacity: 0.8 }} aria-hidden="true" />
             <h4 style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--accent-red)' }}>Request Failure</h4>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', maxWidth: '280px' }}>
               {error.message || 'An error occurred while loading this analysis.'}
@@ -57,7 +58,7 @@ const Card = ({
           </div>
         ) : empty ? (
           <div className="empty-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '150px', padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <span style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🗀</span>
+            <FolderOpen size={28} style={{ opacity: 0.4, marginBottom: '0.5rem' }} aria-hidden="true" />
             <p style={{ fontSize: '0.85rem' }}>{emptyMessage}</p>
           </div>
         ) : (

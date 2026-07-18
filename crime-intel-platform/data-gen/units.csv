@@ -1,0 +1,51 @@
+UnitID,UnitName,DistrictID,StateID,Active
+1,Indiranagar PS,1,1,1
+2,Koramangala PS,1,1,1
+3,Jayanagar PS,1,1,1
+4,Whitefield PS,1,1,1
+5,Malleshwaram PS,1,1,1
+6,Devaraja PS,2,1,1
+7,Lashkar PS,2,1,1
+8,Mandi PS,2,1,1
+9,Nazarbad PS,2,1,1
+10,K R Puram PS,2,1,1
+11,Pandeshwar PS,3,1,1
+12,Kadri PS,3,1,1
+13,Urwa PS,3,1,1
+14,Bunder PS,3,1,1
+15,Kankanady PS,3,1,1
+16,Gokul Road PS,4,1,1
+17,Suburban PS,4,1,1
+18,Town Station PS,4,1,1
+19,Vidyagiri PS,4,1,1
+20,Dharwad Town PS,4,1,1
+21,Khade Bazar PS,5,1,1
+22,Market PS,5,1,1
+23,Camp PS,5,1,1
+24,Shahapur PS,5,1,1
+25,Udyambag PS,5,1,1
+26,Chowk PS,6,1,1
+27,Station Bazaar PS,6,1,1
+28,Raghavendra Nagar PS,6,1,1
+29,University PS,6,1,1
+30,M B Nagar PS,6,1,1
+31,KTJ Nagar PS,7,1,1
+32,Gandhinagar PS,7,1,1
+33,Extension PS,7,1,1
+34,Vidyanagar PS,7,1,1
+35,Badashah PS,7,1,1
+36,Kote PS,8,1,1
+37,Doddapete PS,8,1,1
+38,Tunga Nagar PS,8,1,1
+39,Vinoba Nagar PS,8,1,1
+40,Jayanagar PS,8,1,1
+41,Brucepet PS,9,1,1
+42,Cowlobazaar PS,9,1,1
+43,Gandhinagar PS,9,1,1
+44,Rural PS,9,1,1
+45,APMC PS,9,1,1
+46,Town Station PS,10,1,1
+47,Gandhi Gunj PS,10,1,1
+48,New Town PS,10,1,1
+49,Market PS,10,1,1
+50,Air Force PS,10,1,1

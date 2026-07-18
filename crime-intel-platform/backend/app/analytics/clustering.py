@@ -14,10 +14,10 @@ def detect_hotspots(incidents, eps=0.3, min_samples=4):
 
     # Convert incidents to DataFrame
     df = pd.DataFrame([{
-        "id": inc.id,
-        "lat": inc.lat,
-        "long": inc.long,
-        "crime_type": inc.crime_type
+        "id": inc.CaseMasterID,
+        "lat": inc.latitude,
+        "long": inc.longitude,
+        "crime_type": inc.minor_head_rel.CrimeHeadName if inc.minor_head_rel else 'Unknown'
     } for inc in incidents])
 
     coords = df[["lat", "long"]].values

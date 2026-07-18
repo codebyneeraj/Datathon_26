@@ -24,3 +24,7 @@
 .vscode/
 .idea/
 .gemini/
+
+# Archives & Temporary
+*.zip
+crime-intel-platform/crime-intel-platform/

@@ -3,6 +3,8 @@ import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from 'react-le
 import L from 'leaflet';
 import { Shield, AlertTriangle, AlertCircle, ZoomIn } from 'lucide-react';
 import Button from './ui/Button';
+import CustomSelect from './CustomSelect';
+import { api } from '../api';
 
 // Fix leaflet marker icon issues
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -47,7 +49,9 @@ const MapView = ({
   onSelectOffender, 
   riskScores, 
   districtAccused, 
-  accusedLoading 
+  accusedLoading,
+  dbscanEps,
+  dbscanMinSamples
 }) => {
   const [mapCenter, setMapCenter] = useState(STATE_CENTER);
   const [mapZoom, setMapZoom] = useState(STATE_ZOOM);
@@ -55,13 +59,12 @@ const MapView = ({
   const [hotspotsLoading, setHotspotsLoading] = useState(false);
   const [selectedHotspot, setSelectedHotspot] = useState(null);
 
-  // Fetch hotspots and reset active panel when active district changes
+  // Fetch hotspots using centralized api client (fixes deployment bug where hardcoded
+  // localhost:8000 would silently break in non-local environments)
   useEffect(() => {
     setSelectedHotspot(null);
     setHotspotsLoading(true);
-    let url = "http://localhost:8000/api/hotspots";
     if (activeDistrict) {
-      url += `?district=${activeDistrict}`;
       const config = DISTRICT_CENTROIDS[activeDistrict];
       setMapCenter(config.center);
       setMapZoom(config.zoom);
@@ -70,8 +73,7 @@ const MapView = ({
       setMapZoom(STATE_ZOOM);
     }
 
-    fetch(url)
-      .then((res) => res.json())
+    api.getHotspots(activeDistrict || undefined, dbscanEps, dbscanMinSamples)
       .then((data) => {
         setHotspots(data.features || []);
         setHotspotsLoading(false);
@@ -80,7 +82,7 @@ const MapView = ({
         console.error(err);
         setHotspotsLoading(false);
       });
-  }, [activeDistrict]);
+  }, [activeDistrict, dbscanEps, dbscanMinSamples]);
 
   const handleReset = () => {
     onSelectDistrict(null);
@@ -112,24 +114,21 @@ const MapView = ({
             State View
           </Button>
         )}
-        <select
-          className="select-input"
+        <CustomSelect
           value={activeDistrict || ''}
-          onChange={(e) => onSelectDistrict(e.target.value || null)}
-          aria-label="Select Karnataka district to drill down"
-        >
-          <option value="">-- All Districts --</option>
-          {Object.keys(DISTRICT_CENTROIDS).map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
+          onChange={(val) => onSelectDistrict(val || null)}
+          options={[
+            { value: '', label: 'All Districts' },
+            ...Object.keys(DISTRICT_CENTROIDS).map(name => ({ value: name, label: name }))
+          ]}
+          style={{ width: '160px' }}
+          buttonStyle={{ padding: '4px 10px', fontSize: '0.75rem' }}
+        />
       </div>
 
       <div className="map-wrapper" style={{ flexGrow: 1, position: 'relative' }}>
         {hotspotsLoading && (
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, background: 'rgba(11, 13, 19, 0.7)', display: 'flex', alignItems: 'center', justifyBars: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, background: 'rgba(11, 13, 19, 0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '0.9rem' }}>
             <div className="pulse" style={{ padding: '1rem', background: 'var(--card-bg)', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
               Querying crime hotspot matrices...
             </div>

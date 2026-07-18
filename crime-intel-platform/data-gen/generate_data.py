@@ -3,349 +3,406 @@ import os
 import random
 from datetime import datetime, timedelta
 
-# Try to import Faker; if not present, we will install it later
+# Try to import Faker; if not present, procedurally generate names
 try:
     from faker import Faker
 except ImportError:
-    # Fallback to simple random generation or install instructions
     Faker = None
 
-# Districts and centroids
-DISTRICTS = {
-    "Bengaluru": {"lat": 12.9716, "lon": 77.5946, "stations": ["Indiranagar", "Koramangala", "Jayanagar", "Whitefield", "Malleshwaram"]},
-    "Mysuru": {"lat": 12.2958, "lon": 76.6394, "stations": ["Devaraja", "Lashkar", "Mandi", "Nazarbad", "K R Puram"]},
-    "Mangaluru": {"lat": 12.9141, "lon": 74.8560, "stations": ["Pandeshwar", "Kadri", "Urwa", "Bunder", "Kankanady"]},
-    "Hubli-Dharwad": {"lat": 15.3647, "lon": 75.1240, "stations": ["Gokul Road", "Suburban", "Town Station", "Vidyagiri", "Dharwad Town"]},
-    "Belagavi": {"lat": 15.8497, "lon": 74.4977, "stations": ["Khade Bazar", "Market", "Camp", "Shahapur", "Udyambag"]},
-    "Kalaburagi": {"lat": 17.3297, "lon": 76.8343, "stations": ["Chowk", "Station Bazaar", "Raghavendra Nagar", "University", "M B Nagar"]},
-    "Davanagere": {"lat": 14.4644, "lon": 75.9218, "stations": ["KTJ Nagar", "Gandhinagar", "Extension", "Vidyanagar", "Badashah"]},
-    "Shivamogga": {"lat": 13.9299, "lon": 75.5681, "stations": ["Kote", "Doddapete", "Tunga Nagar", "Vinoba Nagar", "Jayanagar"]},
-    "Ballari": {"lat": 15.1394, "lon": 76.9214, "stations": ["Brucepet", "Cowlobazaar", "Gandhinagar", "Rural", "APMC"]},
-    "Bidar": {"lat": 17.9104, "lon": 77.5199, "stations": ["Town Station", "Gandhi Gunj", "New Town", "Market", "Air Force"]}
+# Districts and centroids (Karnataka)
+DISTRICT_CONFIGS = {
+    1: {"name": "Bengaluru", "lat": 12.9716, "lon": 77.5946, "stations": ["Indiranagar PS", "Koramangala PS", "Jayanagar PS", "Whitefield PS", "Malleshwaram PS"]},
+    2: {"name": "Mysuru", "lat": 12.2958, "lon": 76.6394, "stations": ["Devaraja PS", "Lashkar PS", "Mandi PS", "Nazarbad PS", "K R Puram PS"]},
+    3: {"name": "Mangaluru", "lat": 12.9141, "lon": 74.8560, "stations": ["Pandeshwar PS", "Kadri PS", "Urwa PS", "Bunder PS", "Kankanady PS"]},
+    4: {"name": "Hubli-Dharwad", "lat": 15.3647, "lon": 75.1240, "stations": ["Gokul Road PS", "Suburban PS", "Town Station PS", "Vidyagiri PS", "Dharwad Town PS"]},
+    5: {"name": "Belagavi", "lat": 15.8497, "lon": 74.4977, "stations": ["Khade Bazar PS", "Market PS", "Camp PS", "Shahapur PS", "Udyambag PS"]},
+    6: {"name": "Kalaburagi", "lat": 17.3297, "lon": 76.8343, "stations": ["Chowk PS", "Station Bazaar PS", "Raghavendra Nagar PS", "University PS", "M B Nagar PS"]},
+    7: {"name": "Davanagere", "lat": 14.4644, "lon": 75.9218, "stations": ["KTJ Nagar PS", "Gandhinagar PS", "Extension PS", "Vidyanagar PS", "Badashah PS"]},
+    8: {"name": "Shivamogga", "lat": 13.9299, "lon": 75.5681, "stations": ["Kote PS", "Doddapete PS", "Tunga Nagar PS", "Vinoba Nagar PS", "Jayanagar PS"]},
+    9: {"name": "Ballari", "lat": 15.1394, "lon": 76.9214, "stations": ["Brucepet PS", "Cowlobazaar PS", "Gandhinagar PS", "Rural PS", "APMC PS"]},
+    10: {"name": "Bidar", "lat": 17.9104, "lon": 77.5199, "stations": ["Town Station PS", "Gandhi Gunj PS", "New Town PS", "Market PS", "Air Force PS"]}
 }
 
-CRIME_TYPES = ["Burglary", "Theft", "Assault", "Robbery", "Cyber Crime", "Kidnapping", "Narcotics"]
-STATUS_OPTIONS = ["Under Investigation", "Solved", "Unsolved", "Charge Sheeted"]
+# Major Heads
+MAJOR_HEADS = {
+    1: "Crimes Against Body",
+    2: "Property Offence",
+    3: "Cyber Crime",
+    4: "Narcotics"
+}
+
+# Minor Heads linked to Major Heads
+MINOR_HEADS = {
+    101: {"major_id": 1, "name": "Murder"},
+    102: {"major_id": 1, "name": "Kidnapping"},
+    103: {"major_id": 1, "name": "Assault"},
+    201: {"major_id": 2, "name": "Burglary"},
+    202: {"major_id": 2, "name": "Theft"},
+    203: {"major_id": 2, "name": "Robbery"},
+    301: {"major_id": 3, "name": "Phishing"},
+    302: {"major_id": 3, "name": "Identity Theft"},
+    303: {"major_id": 3, "name": "Crypto Scam"},
+    401: {"major_id": 4, "name": "Narcotics Possession"},
+    402: {"major_id": 4, "name": "Drug Peddling"}
+}
+
+# MO tags by minor head
 MO_TAGS_POOL = {
-    "Burglary": ["night_entry", "broken_lock", "window_forced", "cctv_sprayed", "residential"],
-    "Theft": ["shoplifting", "vehicle_theft", "pickpocketing", "unattended_bag", "daytime"],
-    "Assault": ["street_brawl", "domestic_dispute", "weapon_blunt", "drunken_altercation", "public_place"],
-    "Robbery": ["highway_heist", "weapon_knife", "masked_suspects", "snatching", "cash_transit"],
-    "Cyber Crime": ["phishing_link", "otp_fraud", "identity_theft", "fake_profile", "crypto_scam"],
-    "Kidnapping": ["ransom_demand", "minor_victim", "vehicle_used", "acquaintance_involved"],
-    "Narcotics": ["possession", "peddling", "transit_seizure", "synthetic_drugs", "college_area"]
+    101: ["weapon_sharp", "private_dispute", "outdoor", "nighttime", "rage"],
+    102: ["ransom_demand", "minor_victim", "vehicle_used", "acquaintance_involved"],
+    103: ["street_brawl", "domestic_dispute", "weapon_blunt", "drunken_altercation", "public_place"],
+    201: ["night_entry", "broken_lock", "window_forced", "cctv_sprayed", "residential"],
+    202: ["shoplifting", "vehicle_theft", "pickpocketing", "unattended_bag", "daytime"],
+    203: ["highway_heist", "weapon_knife", "masked_suspects", "snatching", "cash_transit"],
+    301: ["phishing_link", "email_spoofing", "credential_harvesting", "fake_bank"],
+    302: ["identity_theft", "otp_fraud", "sim_swap", "document_forgery"],
+    303: ["crypto_scam", "investment_fraud", "fake_exchange", "rug_pull"],
+    401: ["possession", "personal_use", "transit_seizure", "college_area"],
+    402: ["peddling", "dealership", "bulk_supply", "synthetic_drugs", "network_ring"]
+}
+
+# Status options
+STATUS_MAP = {
+    1: "Under Investigation",
+    2: "Charge Sheeted",
+    3: "Solved"
 }
 
 # Socioeconomic stats
 DISTRICT_SOCIOECONOMIC = [
-    {"district": "Bengaluru", "population": 8443675, "unemployment_rate": 4.2, "urbanization_index": 0.88, "literacy_rate": 88.9},
-    {"district": "Mysuru", "population": 3001127, "unemployment_rate": 5.1, "urbanization_index": 0.42, "literacy_rate": 72.8},
-    {"district": "Mangaluru", "population": 2089649, "unemployment_rate": 3.8, "urbanization_index": 0.51, "literacy_rate": 88.6},
-    {"district": "Hubli-Dharwad", "population": 1847023, "unemployment_rate": 6.4, "urbanization_index": 0.58, "literacy_rate": 80.0},
-    {"district": "Belagavi", "population": 4779661, "unemployment_rate": 5.9, "urbanization_index": 0.28, "literacy_rate": 73.5},
-    {"district": "Kalaburagi", "population": 2566326, "unemployment_rate": 8.2, "urbanization_index": 0.32, "literacy_rate": 64.9},
-    {"district": "Davanagere", "population": 1945497, "unemployment_rate": 5.5, "urbanization_index": 0.35, "literacy_rate": 75.7},
-    {"district": "Shivamogga", "population": 1752753, "unemployment_rate": 4.8, "urbanization_index": 0.36, "literacy_rate": 80.5},
-    {"district": "Ballari", "population": 2452595, "unemployment_rate": 7.1, "urbanization_index": 0.38, "literacy_rate": 67.4},
-    {"district": "Bidar", "population": 1703300, "unemployment_rate": 7.8, "urbanization_index": 0.25, "literacy_rate": 70.5}
+    {"district_id": 1, "population": 8443675, "unemployment_rate": 4.2, "urbanization_index": 0.88, "literacy_rate": 88.9},
+    {"district_id": 2, "population": 3001127, "unemployment_rate": 5.1, "urbanization_index": 0.42, "literacy_rate": 72.8},
+    {"district_id": 3, "population": 2089649, "unemployment_rate": 3.8, "urbanization_index": 0.51, "literacy_rate": 88.6},
+    {"district_id": 4, "population": 1847023, "unemployment_rate": 6.4, "urbanization_index": 0.58, "literacy_rate": 80.0},
+    {"district_id": 5, "population": 4779661, "unemployment_rate": 5.9, "urbanization_index": 0.28, "literacy_rate": 73.5},
+    {"district_id": 6, "population": 2566326, "unemployment_rate": 8.2, "urbanization_index": 0.32, "literacy_rate": 64.9},
+    {"district_id": 7, "population": 1945497, "unemployment_rate": 5.5, "urbanization_index": 0.35, "literacy_rate": 75.7},
+    {"district_id": 8, "population": 1752753, "unemployment_rate": 4.8, "urbanization_index": 0.36, "literacy_rate": 80.5},
+    {"district_id": 9, "population": 2452595, "unemployment_rate": 7.1, "urbanization_index": 0.38, "literacy_rate": 67.4},
+    {"district_id": 10, "population": 1703300, "unemployment_rate": 7.8, "urbanization_index": 0.25, "literacy_rate": 70.5}
 ]
 
-def generate_lat_lon(centroid_lat, centroid_lon, jitter=0.08):
-    """Jitter lat/lon slightly around centroid to simulate station clustering."""
+def generate_lat_lon(centroid_lat, centroid_lon, jitter=0.07):
     return (
         round(centroid_lat + random.uniform(-jitter, jitter), 6),
         round(centroid_lon + random.uniform(-jitter, jitter), 6)
     )
 
+def make_crime_no(district_id, station_id, year, serial):
+    # Format: 1 digit category (1) + 4 digit district + 4 digit station + 4 digit year + 5 digit serial
+    return f"1{district_id:04d}{station_id:04d}{year:04d}{serial:05d}"
+
+def make_case_no(year, serial):
+    # Format: YYYY + 5-digit serial (e.g. 202500042)
+    return f"{year:04d}{serial:05d}"
+
 def main():
-    print("Initializing synthetic data generation...")
+    print("Initializing KSP ER-aligned synthetic data generation...")
     fake = Faker('en_IN') if Faker else None
-    if not fake:
-        print("Faker not found. Names will be procedurally generated.")
     
-    os.makedirs("crime-intel-platform/data-gen", exist_ok=True)
+    out_dir = os.path.dirname(os.path.abspath(__file__))
+    os.makedirs(out_dir, exist_ok=True)
     
-    incidents = []
+    # 1. Output Districts
+    with open(f"{out_dir}/districts.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["DistrictID", "DistrictName", "StateID", "Active"])
+        for d_id, cfg in DISTRICT_CONFIGS.items():
+            writer.writerow([d_id, cfg["name"], 1, 1])
+
+    # 2. Output Units (Police Stations)
+    # Bengaluru has stations 1-5, Mysuru has 6-10, etc.
+    station_map = {} # station_id -> {name, district_id}
+    station_counter = 1
+    with open(f"{out_dir}/units.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["UnitID", "UnitName", "DistrictID", "StateID", "Active"])
+        for d_id, cfg in DISTRICT_CONFIGS.items():
+            for st_name in cfg["stations"]:
+                writer.writerow([station_counter, st_name, d_id, 1, 1])
+                station_map[station_counter] = {"name": st_name, "district_id": d_id}
+                station_counter += 1
+
+    # 3. Output Case Status Master
+    with open(f"{out_dir}/case_status_master.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["CaseStatusID", "CaseStatusName"])
+        for st_id, st_name in STATUS_MAP.items():
+            writer.writerow([st_id, st_name])
+
+    # 4. Output Crime Heads
+    with open(f"{out_dir}/crime_heads.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["CrimeHeadID", "CrimeGroupName", "Active"])
+        for h_id, h_name in MAJOR_HEADS.items():
+            writer.writerow([h_id, h_name, 1])
+
+    # 5. Output Crime Sub Heads
+    with open(f"{out_dir}/crime_sub_heads.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["CrimeSubHeadID", "CrimeHeadID", "CrimeHeadName", "SeqID"])
+        for sub_id, cfg in MINOR_HEADS.items():
+            writer.writerow([sub_id, cfg["major_id"], cfg["name"], sub_id])
+
+    # 6. Output Socioeconomic stats
+    with open(f"{out_dir}/district_socioeconomic.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["DistrictID", "population", "unemployment_rate", "urbanization_index", "literacy_rate"])
+        for row in DISTRICT_SOCIOECONOMIC:
+            writer.writerow([row["district_id"], row["population"], row["unemployment_rate"], row["urbanization_index"], row["literacy_rate"]])
+
+    # Collections for CaseMaster, Accused, Victims
+    cases = []
     accused_records = []
     victims = []
     
-    incident_id_counter = 1
+    case_id_counter = 1
     accused_id_counter = 1
     victim_id_counter = 1
     
-    # ----------------------------------------------------
-    # Pattern A: Repeat-Offender Network in Bengaluru
-    # 5 accused (IDs 1-5) linked across 12 specific incidents
-    # ----------------------------------------------------
-    bengaluru_centroid = DISTRICTS["Bengaluru"]
-    repeat_accused = []
-    
-    # Pre-create the 5 repeat accused
-    accused_names = [
-        "Ramesh Kumar", "Suresh Naik", "Anil Gowda", "Vijay Shekar", "Kiran Patil"
-    ]
-    for i in range(5):
-        repeat_accused.append({
-            "id": accused_id_counter,
-            "name": accused_names[i],
-            "age": random.randint(24, 42),
-            "gender": "Male",
-            "incidents": [],
-            "risk_score": random.randint(75, 95)
+    # Station serial counters: (district_id, station_id, year) -> current running serial
+    serial_counters = {}
+    def get_next_serial(d_id, st_id, year):
+        key = (d_id, st_id, year)
+        serial_counters[key] = serial_counters.get(key, 0) + 1
+        return serial_counters[key]
+
+    # Generate repeat offenders network in Bengaluru (District 1, Station 1: Indiranagar PS)
+    repeat_accused_profiles = []
+    repeat_names = ["Ramesh Kumar", "Suresh Naik", "Anil Gowda", "Vijay Shekar", "Kiran Patil"]
+    for i, name in enumerate(repeat_names):
+        repeat_accused_profiles.append({
+            "person_id": f"A-908{i+1}",
+            "name": name,
+            "age": random.randint(25, 40),
+            "gender_id": 1, # Male
+            "risk_score": random.randint(78, 96)
+        })
+
+    # Pattern A: 12 incidents linked to the same 5 repeat accused
+    for i in range(12):
+        year = 2025
+        serial = get_next_serial(1, 1, year)
+        crime_no = make_crime_no(1, 1, year, serial)
+        case_no = make_case_no(year, serial)
+        
+        # Coordinated property offences
+        minor_id = 201 if i % 2 == 0 else 203 # Burglary or Robbery
+        major_id = 2
+        
+        dt = datetime(2025, 11, random.randint(1, 28), random.randint(0, 23), random.randint(0, 59))
+        lat, lon = generate_lat_lon(DISTRICT_CONFIGS[1]["lat"], DISTRICT_CONFIGS[1]["lon"], jitter=0.03)
+        mo_tags = ",".join(random.sample(MO_TAGS_POOL[minor_id], 3))
+
+        cases.append({
+            "CaseMasterID": case_id_counter,
+            "CrimeNo": crime_no,
+            "CaseNo": case_no,
+            "CrimeRegisteredDate": dt.strftime("%Y-%m-%d"),
+            "IncidentFromDate": dt.strftime("%Y-%m-%d %H:%M:%S"),
+            "PoliceStationID": 1, # Indiranagar PS
+            "CaseStatusID": 1 if i % 3 == 0 else 2 if i % 3 == 1 else 3,
+            "CrimeMajorHeadID": major_id,
+            "CrimeMinorHeadID": minor_id,
+            "latitude": lat,
+            "longitude": lon,
+            "BriefFacts": f"Coordinated heist linked to the Bangalore West Gang. MO matches tag '{mo_tags}'. Case details: Property damage reported at Indiranagar jurisdiction.",
+            "mo_tags": mo_tags
+        })
+
+        # Link all 5 repeat offenders to this case
+        for acc in repeat_accused_profiles:
+            accused_records.append({
+                "AccusedMasterID": accused_id_counter,
+                "CaseMasterID": case_id_counter,
+                "AccusedName": acc["name"],
+                "AgeYear": acc["age"],
+                "GenderID": acc["gender_id"],
+                "PersonID": acc["person_id"],
+                "risk_score": acc["risk_score"]
+            })
+            accused_id_counter += 1
+
+        # Add 1-2 victims
+        for v_idx in range(random.randint(1, 2)):
+            victims.append({
+                "VictimMasterID": victim_id_counter,
+                "CaseMasterID": case_id_counter,
+                "VictimName": fake.name() if fake else f"Victim V{victim_id_counter}",
+                "AgeYear": random.randint(22, 60),
+                "GenderID": random.choice([1, 2])
+            })
+            victim_id_counter += 1
+
+        case_id_counter += 1
+
+    # Pattern B: Crime Spike in Hubli-Dharwad in October 2025
+    # Let's generate 45 extra cases of Burglary (201) / Theft (202) in District 4 (Hubli-Dharwad) in October 2025
+    for i in range(45):
+        year = 2025
+        station_id = random.randint(16, 20) # Hubli-Dharwad stations
+        serial = get_next_serial(4, station_id, year)
+        crime_no = make_crime_no(4, station_id, year, serial)
+        case_no = make_case_no(year, serial)
+        
+        minor_id = 201 if i % 2 == 0 else 202
+        major_id = 2
+        
+        dt = datetime(2025, 10, random.randint(1, 31), random.randint(0, 23), random.randint(0, 59))
+        lat, lon = generate_lat_lon(DISTRICT_CONFIGS[4]["lat"], DISTRICT_CONFIGS[4]["lon"], jitter=0.04)
+        mo_tags = ",".join(random.sample(MO_TAGS_POOL[minor_id], 3))
+
+        cases.append({
+            "CaseMasterID": case_id_counter,
+            "CrimeNo": crime_no,
+            "CaseNo": case_no,
+            "CrimeRegisteredDate": dt.strftime("%Y-%m-%d"),
+            "IncidentFromDate": dt.strftime("%Y-%m-%d %H:%M:%S"),
+            "PoliceStationID": station_id,
+            "CaseStatusID": random.choice([1, 2, 3]),
+            "CrimeMajorHeadID": major_id,
+            "CrimeMinorHeadID": minor_id,
+            "latitude": lat,
+            "longitude": lon,
+            "BriefFacts": f"Property offence spike incident. Theft/Burglary reported in Hubli-Dharwad station limits. MO: {mo_tags}.",
+            "mo_tags": mo_tags
+        })
+
+        # Add accused
+        accused_records.append({
+            "AccusedMasterID": accused_id_counter,
+            "CaseMasterID": case_id_counter,
+            "AccusedName": fake.name() if fake else f"Suspect H{accused_id_counter}",
+            "AgeYear": random.randint(18, 55),
+            "GenderID": random.choice([1, 2]),
+            "PersonID": f"A-HD{accused_id_counter}",
+            "risk_score": random.randint(25, 80)
         })
         accused_id_counter += 1
 
-    # Generate 12 incidents for this repeat offender cluster in Indiranagar/Koramangala
-    repeat_incidents_ids = []
-    for i in range(12):
-        # Coordinates very close together to form a spatial hotspot for DBSCAN
-        lat, lon = generate_lat_lon(bengaluru_centroid["lat"], bengaluru_centroid["lon"], jitter=0.01)
-        crime = "Robbery" if i % 2 == 0 else "Burglary"
-        
-        # Incident occurred between March and May 2025
-        dt = datetime(2025, 3, 1) + timedelta(days=random.randint(0, 90))
-        dt_str = dt.strftime("%Y-%m-%d")
-        time_str = f"{random.randint(20, 23)}:{random.choice(['00', '15', '30', '45'])}:00"
-        
-        station = "Indiranagar" if i % 3 != 0 else "Koramangala"
-        mo = random.sample(MO_TAGS_POOL[crime], 2)
-        mo.append("repeat_offender_signature")
-        
-        incidents.append({
-            "id": incident_id_counter,
-            "crime_type": crime,
-            "date": dt_str,
-            "time": time_str,
-            "lat": lat,
-            "long": lon,
-            "district": "Bengaluru",
-            "station": station,
-            "mo_tags": ",".join(mo),
-            "status": "Under Investigation" if i % 4 == 0 else "Solved"
-        })
-        
-        # Link 2 to 3 of the repeat offenders to this incident
-        selected_offenders = random.sample(repeat_accused, random.randint(2, 3))
-        for offender in selected_offenders:
-            offender["incidents"].append(incident_id_counter)
-            
-        # Add victims for these incidents
-        num_victims = random.randint(1, 2)
-        for _ in range(num_victims):
-            victims.append({
-                "id": victim_id_counter,
-                "age": random.randint(22, 60),
-                "gender": random.choice(["Male", "Female"]),
-                "incident_id": incident_id_counter
-            })
-            victim_id_counter += 1
-            
-        repeat_incidents_ids.append(incident_id_counter)
-        incident_id_counter += 1
-
-    # Keep track of generated repeat accused
-    accused_records.extend(repeat_accused)
-
-    # ----------------------------------------------------
-    # Pattern B: Hubli-Dharwad Burglary Spike in Oct 2025
-    # Baseline: ~12 incidents of burglary/month in Hubli-Dharwad from Jan-Dec 2025
-    # Spike: Oct 2025 will have ~35 burglaries (approx 3x or 200% increase!)
-    # ----------------------------------------------------
-    hubli_centroid = DISTRICTS["Hubli-Dharwad"]
-    
-    # Generate Hubli-Dharwad incidents for 12 months
-    for month in range(1, 13):
-        # Determine number of burglary incidents for this month
-        if month == 10:  # October Spike
-            num_burg = random.randint(32, 40)
-        else:            # Baseline months
-            num_burg = random.randint(8, 14)
-            
-        # Generate the burglaries
-        for _ in range(num_burg):
-            lat, lon = generate_lat_lon(hubli_centroid["lat"], hubli_centroid["lon"], jitter=0.04)
-            # Focus coordinates near Gokul Road or Town Station to form hotspots
-            station = random.choice(hubli_centroid["stations"])
-            dt = datetime(2025, month, 1) + timedelta(days=random.randint(0, 27))
-            
-            incidents.append({
-                "id": incident_id_counter,
-                "crime_type": "Burglary",
-                "date": dt.strftime("%Y-%m-%d"),
-                "time": f"{random.randint(0, 23):02d}:{random.randint(0, 59):02d}:00",
-                "lat": lat,
-                "long": lon,
-                "district": "Hubli-Dharwad",
-                "station": station,
-                "mo_tags": ",".join(random.sample(MO_TAGS_POOL["Burglary"], 2)),
-                "status": random.choice(STATUS_OPTIONS)
-            })
-            
-            # Generate a random victim
-            victims.append({
-                "id": victim_id_counter,
-                "age": random.randint(18, 70),
-                "gender": random.choice(["Male", "Female"]),
-                "incident_id": incident_id_counter
-            })
-            victim_id_counter += 1
-            incident_id_counter += 1
-            
-        # Also generate some other random crimes in Hubli-Dharwad to keep the dataset full
-        num_other = random.randint(5, 10)
-        for _ in range(num_other):
-            lat, lon = generate_lat_lon(hubli_centroid["lat"], hubli_centroid["lon"], jitter=0.06)
-            crime = random.choice([c for c in CRIME_TYPES if c != "Burglary"])
-            station = random.choice(hubli_centroid["stations"])
-            dt = datetime(2025, month, 1) + timedelta(days=random.randint(0, 27))
-            
-            incidents.append({
-                "id": incident_id_counter,
-                "crime_type": crime,
-                "date": dt.strftime("%Y-%m-%d"),
-                "time": f"{random.randint(0, 23):02d}:{random.randint(0, 59):02d}:00",
-                "lat": lat,
-                "long": lon,
-                "district": "Hubli-Dharwad",
-                "station": station,
-                "mo_tags": ",".join(random.sample(MO_TAGS_POOL[crime], min(len(MO_TAGS_POOL[crime]), 2))),
-                "status": random.choice(STATUS_OPTIONS)
-            })
-            incident_id_counter += 1
-
-    # ----------------------------------------------------
-    # Generate Remaining Background Data
-    # 3000 incidents total (we have created ~300 so far)
-    # Generate incidents across all 10 districts for Jan-Dec 2025
-    # ----------------------------------------------------
-    start_date = datetime(2025, 1, 1)
-    
-    # Districts weights: let's give Bengaluru higher weight to mimic real distributions
-    district_names = list(DISTRICTS.keys())
-    weights = [0.35 if d == "Bengaluru" else 0.12 if d == "Hubli-Dharwad" else 0.07 for d in district_names]
-    
-    remaining_incidents_count = 3000 - len(incidents)
-    
-    for _ in range(remaining_incidents_count):
-        dist = random.choices(district_names, weights=weights, k=1)[0]
-        # Skip special manual generation for Hubli-Dharwad Burglary here
-        crime = random.choice(CRIME_TYPES)
-        if dist == "Hubli-Dharwad" and crime == "Burglary":
-            # Select another crime type so we don't skew the spike/baseline math
-            crime = random.choice([c for c in CRIME_TYPES if c != "Burglary"])
-            
-        centroid = DISTRICTS[dist]
-        lat, lon = generate_lat_lon(centroid["lat"], centroid["lon"], jitter=0.08)
-        station = random.choice(centroid["stations"])
-        
-        # Pick random date in 2025
-        dt = start_date + timedelta(days=random.randint(0, 364))
-        dt_str = dt.strftime("%Y-%m-%d")
-        time_str = f"{random.randint(0, 23):02d}:{random.randint(0, 59):02d}:00"
-        
-        mo = random.sample(MO_TAGS_POOL[crime], min(len(MO_TAGS_POOL[crime]), 2))
-        
-        incidents.append({
-            "id": incident_id_counter,
-            "crime_type": crime,
-            "date": dt_str,
-            "time": time_str,
-            "lat": lat,
-            "long": lon,
-            "district": dist,
-            "station": station,
-            "mo_tags": ",".join(mo),
-            "status": random.choice(STATUS_OPTIONS)
-        })
-        
-        # Randomly add a victim
+        # Add victim
         victims.append({
-            "id": victim_id_counter,
-            "age": random.randint(10, 80),
-            "gender": random.choice(["Male", "Female", "Other"]),
-            "incident_id": incident_id_counter
+            "VictimMasterID": victim_id_counter,
+            "CaseMasterID": case_id_counter,
+            "VictimName": fake.name() if fake else f"Victim H{victim_id_counter}",
+            "AgeYear": random.randint(20, 65),
+            "GenderID": random.choice([1, 2])
         })
         victim_id_counter += 1
-        
-        incident_id_counter += 1
+        case_id_counter += 1
 
-    # ----------------------------------------------------
-    # Generate Remaining Accused Records
-    # Total of 800 accused records. We have 5 repeat offenders already.
-    # ----------------------------------------------------
-    remaining_accused_count = 800 - len(accused_records)
-    
-    first_names_male = ["Aarav", "Arjun", "Aditya", "Rahul", "Preetham", "Girish", "Manjunath", "Srinivas", "Vikram", "Chethan"]
-    first_names_female = ["Ananya", "Divya", "Priya", "Kavya", "Deepa", "Shalini", "Sneha", "Lakshmi", "Meghana", "Sahana"]
-    last_names = ["Gowda", "Patil", "Kumar", "Shetty", "Naik", "Reddy", "Bhat", "Rao", "Joshi", "Hegde"]
-    
-    for _ in range(remaining_accused_count):
-        gender = random.choices(["Male", "Female"], weights=[0.85, 0.15], k=1)[0]
-        if fake:
-            name = fake.name_male() if gender == "Male" else fake.name_female()
-        else:
-            first = random.choice(first_names_male) if gender == "Male" else random.choice(first_names_female)
-            last = random.choice(last_names)
-            name = f"{first} {last}"
-            
-        age = random.randint(18, 65)
+    # Standard Random Data Generation: Generate remaining incidents to reach 3000 total cases
+    target_count = 3000
+    while len(cases) < target_count:
+        # Pick random district, station, date
+        d_id = random.choice(list(DISTRICT_CONFIGS.keys()))
+        cfg = DISTRICT_CONFIGS[d_id]
         
-        # Most accused have only 1 incident. Some might have 2 or 3.
-        num_links = random.choices([1, 2, 3], weights=[0.85, 0.12, 0.03], k=1)[0]
-        linked_incidents = []
+        # Pick station linked to district
+        # Station IDs range: Bengaluru (1-5), Mysuru (6-10), etc.
+        st_offset = (d_id - 1) * 5
+        st_id = st_offset + random.randint(1, 5)
         
-        # Select random incidents (excluding the 12 specific repeat offender ones to keep the cluster clean)
-        # Choose incidents in the same general region if multiple, but simple random is fine for background
-        available_incidents = [inc["id"] for inc in incidents if inc["id"] > 12]
-        if available_incidents:
-            linked_incidents = random.sample(available_incidents, min(len(available_incidents), num_links))
-            
-        accused_records.append({
-            "id": accused_id_counter,
-            "name": name,
-            "age": age,
-            "gender": gender,
-            "incidents": linked_incidents,
-            "risk_score": random.randint(10, 70) # Lower risk score than repeat-offender cluster
+        year = 2025
+        serial = get_next_serial(d_id, st_id, year)
+        crime_no = make_crime_no(d_id, st_id, year, serial)
+        case_no = make_case_no(year, serial)
+
+        # Pick random crime minor head
+        minor_id = random.choice(list(MINOR_HEADS.keys()))
+        major_id = MINOR_HEADS[minor_id]["major_id"]
+
+        # Date range: Jan 2025 to Dec 2025 (excluding October to prevent diluting the spike)
+        month = random.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12])
+        dt = datetime(2025, month, random.randint(1, 28), random.randint(0, 23), random.randint(0, 59))
+        
+        lat, lon = generate_lat_lon(cfg["lat"], cfg["lon"], jitter=0.06)
+        mo_tags = ",".join(random.sample(MO_TAGS_POOL[minor_id], 3))
+
+        cases.append({
+            "CaseMasterID": case_id_counter,
+            "CrimeNo": crime_no,
+            "CaseNo": case_no,
+            "CrimeRegisteredDate": dt.strftime("%Y-%m-%d"),
+            "IncidentFromDate": dt.strftime("%Y-%m-%d %H:%M:%S"),
+            "PoliceStationID": st_id,
+            "CaseStatusID": random.choice([1, 2, 3]),
+            "CrimeMajorHeadID": major_id,
+            "CrimeMinorHeadID": minor_id,
+            "latitude": lat,
+            "longitude": lon,
+            "BriefFacts": f"Regular crime incident report. Crime type: {MINOR_HEADS[minor_id]['name']}. MO tags matching '{mo_tags}'. Location details archived.",
+            "mo_tags": mo_tags
         })
-        accused_id_counter += 1
 
-    # ----------------------------------------------------
-    # Write to CSV files
-    # ----------------------------------------------------
-    print(f"Writing {len(incidents)} incidents to CSV...")
-    with open("crime-intel-platform/data-gen/incidents.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["id", "crime_type", "date", "time", "lat", "long", "district", "station", "mo_tags", "status"])
-        writer.writeheader()
-        writer.writerows(incidents)
-        
-    print(f"Writing {len(accused_records)} accused to CSV...")
-    with open("crime-intel-platform/data-gen/accused.csv", "w", newline="", encoding="utf-8") as f:
+        # 30% chance to have no accused, 50% for 1 accused, 20% for 2 accused
+        rand_val = random.random()
+        num_accused = 0 if rand_val < 0.3 else 1 if rand_val < 0.8 else 2
+        for _ in range(num_accused):
+            # 5% chance to link to an existing repeat offender to create some cross-links
+            if random.random() < 0.05:
+                acc = random.choice(repeat_accused_profiles)
+                accused_records.append({
+                    "AccusedMasterID": accused_id_counter,
+                    "CaseMasterID": case_id_counter,
+                    "AccusedName": acc["name"],
+                    "AgeYear": acc["age"],
+                    "GenderID": acc["gender_id"],
+                    "PersonID": acc["person_id"],
+                    "risk_score": acc["risk_score"]
+                })
+            else:
+                accused_records.append({
+                    "AccusedMasterID": accused_id_counter,
+                    "CaseMasterID": case_id_counter,
+                    "AccusedName": fake.name() if fake else f"Suspect S{accused_id_counter}",
+                    "AgeYear": random.randint(18, 62),
+                    "GenderID": random.choice([1, 2]),
+                    "PersonID": f"A-GEN{accused_id_counter}",
+                    "risk_score": random.randint(15, 75)
+                })
+            accused_id_counter += 1
+
+        # 1-2 victims
+        for _ in range(random.randint(1, 2)):
+            victims.append({
+                "VictimMasterID": victim_id_counter,
+                "CaseMasterID": case_id_counter,
+                "VictimName": fake.name() if fake else f"Victim V{victim_id_counter}",
+                "AgeYear": random.randint(12, 75),
+                "GenderID": random.choice([1, 2])
+            })
+            victim_id_counter += 1
+
+        case_id_counter += 1
+
+    # Output Case Master CSV
+    with open(f"{out_dir}/case_master.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["id", "name", "age", "gender", "past_incident_ids", "risk_score"])
-        for acc in accused_records:
-            writer.writerow([
-                acc["id"],
-                acc["name"],
-                acc["age"],
-                acc["gender"],
-                ",".join(map(str, acc["incidents"])),
-                acc["risk_score"]
-            ])
-            
-    print(f"Writing {len(victims)} victims to CSV...")
-    with open("crime-intel-platform/data-gen/victims.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["id", "age", "gender", "incident_id"])
-        writer.writeheader()
-        writer.writerows(victims)
-        
-    print("Writing district socioeconomic data to CSV...")
-    with open("crime-intel-platform/data-gen/district_socioeconomic.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["district", "population", "unemployment_rate", "urbanization_index", "literacy_rate"])
-        writer.writeheader()
-        writer.writerows(DISTRICT_SOCIOECONOMIC)
-        
-    print("Data generation completed successfully!")
+        writer.writerow(["CaseMasterID", "CrimeNo", "CaseNo", "CrimeRegisteredDate", "IncidentFromDate", "PoliceStationID", "CaseStatusID", "CrimeMajorHeadID", "CrimeMinorHeadID", "latitude", "longitude", "BriefFacts", "mo_tags"])
+        for c in cases:
+            writer.writerow([c["CaseMasterID"], c["CrimeNo"], c["CaseNo"], c["CrimeRegisteredDate"], c["IncidentFromDate"], c["PoliceStationID"], c["CaseStatusID"], c["CrimeMajorHeadID"], c["CrimeMinorHeadID"], c["latitude"], c["longitude"], c["BriefFacts"], c["mo_tags"]])
+
+    # Output Accused CSV
+    with open(f"{out_dir}/accused.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["AccusedMasterID", "CaseMasterID", "AccusedName", "AgeYear", "GenderID", "PersonID", "risk_score"])
+        for a in accused_records:
+            writer.writerow([a["AccusedMasterID"], a["CaseMasterID"], a["AccusedName"], a["AgeYear"], a["GenderID"], a["PersonID"], a["risk_score"]])
+
+    # Output Victims CSV
+    with open(f"{out_dir}/victims.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["VictimMasterID", "CaseMasterID", "VictimName", "AgeYear", "GenderID"])
+        for v in victims:
+            writer.writerow([v["VictimMasterID"], v["CaseMasterID"], v["VictimName"], v["AgeYear"], v["GenderID"]])
+
+    print(f"Data generation complete! Saved files to {out_dir}:")
+    print(f"- Districts: {len(DISTRICT_CONFIGS)}")
+    print(f"- Units (Stations): {len(station_map)}")
+    print(f"- Case Master Records: {len(cases)}")
+    print(f"- Accused Records: {len(accused_records)}")
+    print(f"- Victim Records: {len(victims)}")
 
 if __name__ == "__main__":
     main()

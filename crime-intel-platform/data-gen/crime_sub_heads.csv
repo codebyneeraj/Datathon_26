@@ -1,0 +1,12 @@
+CrimeSubHeadID,CrimeHeadID,CrimeHeadName,SeqID
+101,1,Murder,101
+102,1,Kidnapping,102
+103,1,Assault,103
+201,2,Burglary,201
+202,2,Theft,202
+203,2,Robbery,203
+301,3,Phishing,301
+302,3,Identity Theft,302
+303,3,Crypto Scam,303
+401,4,Narcotics Possession,401
+402,4,Drug Peddling,402

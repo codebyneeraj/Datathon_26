@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
-from ..models import Incident, DistrictSocioeconomic
+from ..models import CaseMaster, District, Unit, DistrictSocioeconomic
 
 router = APIRouter(prefix="/api/correlations", tags=["correlations"])
 
@@ -11,24 +11,25 @@ router = APIRouter(prefix="/api/correlations", tags=["correlations"])
 def get_correlations_api(db: Session = Depends(get_db)):
     # 1. Query crime counts per district
     crime_counts = db.query(
-        Incident.district,
-        func.count(Incident.id).label("crime_count")
-    ).group_by(Incident.district).all()
+        District.DistrictName,
+        func.count(CaseMaster.CaseMasterID).label("crime_count")
+    ).select_from(CaseMaster).join(Unit).join(District).group_by(District.DistrictName).all()
     
-    crime_map = {district: count for district, count in crime_counts}
+    crime_map = {dist_name: count for dist_name, count in crime_counts}
     
     # 2. Query socio-economic details
-    socio_stats = db.query(DistrictSocioeconomic).all()
+    socio_stats = db.query(DistrictSocioeconomic).join(District).all()
     
     # Align data
     aligned_data = []
     for stat in socio_stats:
-        count = crime_map.get(stat.district, 0)
+        dist_name = stat.district.DistrictName
+        count = crime_map.get(dist_name, 0)
         # Crime rate per 100,000 citizens
         crime_rate = round((count / stat.population) * 100000, 2) if stat.population > 0 else 0.0
         
         aligned_data.append({
-            "district": stat.district,
+            "district": dist_name,
             "crime_count": count,
             "population": stat.population,
             "crime_rate": crime_rate,

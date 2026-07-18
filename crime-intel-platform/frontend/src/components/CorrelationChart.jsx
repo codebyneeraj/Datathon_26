@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CustomSelect from './CustomSelect';
 import {
   ResponsiveContainer,
   BarChart,
@@ -49,20 +50,40 @@ const CorrelationChart = ({ correlationData }) => {
     population: d.population
   }));
 
-  // Calculate domains dynamically based on data spread (Flaw 9)
+  // Round domain bounds to nearest sensible step based on value magnitude
+  // This prevents ugly tick values like 3.58, 4.58, 299996, etc.
+  const snapToNice = (val, isFloor) => {
+    if (val === 0) return 0;
+    const abs = Math.abs(val);
+    let step;
+    if (abs < 1) step = 0.1;
+    else if (abs < 10) step = 1;
+    else if (abs < 100) step = 5;
+    else if (abs < 1000) step = 50;
+    else if (abs < 10000) step = 500;
+    else step = 10000;
+    return isFloor ? Math.floor(val / step) * step : Math.ceil(val / step) * step;
+  };
+
   const xValues = districtData.map(d => d.metricValue);
   const xMin = Math.min(...xValues);
   const xMax = Math.max(...xValues);
   const xRange = xMax - xMin;
-  const xPadding = xRange * 0.05 || (metric === 'urbanization_index' ? 0.05 : 1);
-  const xDomain = [xMin - xPadding, xMax + xPadding];
+  const xPad = xRange * 0.1 || (metric === 'urbanization_index' ? 0.1 : 1);
+  const xDomain = [snapToNice(xMin - xPad, true), snapToNice(xMax + xPad, false)];
 
   const yValues = districtData.map(d => d.crimeRate);
   const yMin = Math.min(...yValues);
   const yMax = Math.max(...yValues);
   const yRange = yMax - yMin;
-  const yPadding = yRange * 0.05 || 1;
-  const yDomain = [yMin - yPadding, yMax + yPadding];
+  const yPad = yRange * 0.1 || 1;
+  const yDomain = [snapToNice(yMin - yPad, true), snapToNice(yMax + yPad, false)];
+
+  const fmtTick = (v) => {
+    if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+    if (!Number.isInteger(v)) return parseFloat(v.toFixed(2)).toString();
+    return v;
+  };
 
   const getMetricLabel = () => {
     if (metric === 'unemployment_rate') return 'Unemployment Rate (%)';
@@ -71,25 +92,23 @@ const CorrelationChart = ({ correlationData }) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Socioeconomic Analysis</span>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <select
-            className="select-input"
-            value={metric}
-            onChange={(e) => setMetric(e.target.value)}
-          >
-            <option value="unemployment_rate">Unemployment</option>
-            <option value="urbanization_index">Urbanization</option>
-            <option value="literacy_rate">Literacy</option>
-          </select>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%' }}>
+      {/* Toolbar: only the metric selector, right-aligned */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <CustomSelect
+          value={metric}
+          onChange={(val) => setMetric(val)}
+          options={[
+            { value: 'unemployment_rate', label: 'Unemployment' },
+            { value: 'urbanization_index', label: 'Urbanization' },
+            { value: 'literacy_rate', label: 'Literacy' }
+          ]}
+          style={{ width: '140px' }}
+          buttonStyle={{ padding: '4px 10px', fontSize: '0.75rem' }}
+        />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1rem', flexGrow: 1, minHeight: 230 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1rem', flexGrow: 1, minHeight: 0 }}>
         {/* Pearson Coefficient Chart */}
         <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', borderRadius: '10px', padding: '0.75rem', display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '0.75rem', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '0.5rem', textAlign: 'center' }}>
@@ -140,7 +159,8 @@ const CorrelationChart = ({ correlationData }) => {
                   stroke="var(--text-muted)"
                   fontSize={10}
                   domain={xDomain}
-                  tickCount={6}
+                  tickCount={5}
+                  tickFormatter={fmtTick}
                 />
                 <YAxis
                   type="number"
@@ -149,7 +169,8 @@ const CorrelationChart = ({ correlationData }) => {
                   stroke="var(--text-muted)"
                   fontSize={10}
                   domain={yDomain}
-                  tickCount={6}
+                  tickCount={5}
+                  tickFormatter={fmtTick}
                 />
                 <Tooltip
                   cursor={{ strokeDasharray: '3 3', stroke: 'rgba(255,255,255,0.1)' }}

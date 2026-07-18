@@ -1,82 +1,97 @@
 import networkx as nx
 from sqlalchemy.orm import Session
-from ..models import Accused, Incident, Victim
+from ..models import Accused, CaseMaster, Victim
 
 def build_network_graph(accused_id: int, db: Session):
     # Create NetworkX Graph
     G = nx.Graph()
 
-    # Get target accused
-    target_accused = db.query(Accused).filter(Accused.id == accused_id).first()
-    if not target_accused:
+    # Get target accused link
+    target_link = db.query(Accused).filter(Accused.AccusedMasterID == accused_id).first()
+    if not target_link:
         return {"nodes": [], "edges": []}
 
-    # Helper function to get incidents linked to an accused
-    def parse_incident_ids(past_ids_str):
-        if not past_ids_str:
-            return []
-        try:
-            return [int(x.strip()) for x in past_ids_str.split(",") if x.strip()]
-        except ValueError:
-            return []
+    # Get all case links for this physical person
+    all_links = db.query(Accused).filter(Accused.PersonID == target_link.PersonID).all()
+    target_case_ids = [l.CaseMasterID for l in all_links]
 
-    target_inc_ids = parse_incident_ids(target_accused.past_incident_ids)
-    if not target_inc_ids:
-        # If no incidents, just return the single node
+    if not target_case_ids:
+        # Just return target
         return {
             "nodes": [{
                 "data": {
-                    "id": f"accused_{target_accused.id}",
-                    "label": target_accused.name,
+                    "id": f"accused_{target_link.PersonID}",
+                    "label": target_link.AccusedName,
                     "type": "accused",
                     "centrality": 1.0,
-                    "risk_score": target_accused.risk_score
+                    "risk_score": target_link.risk_score
                 }
             }],
             "edges": []
         }
 
-    # Query all incidents linked to the target accused
-    incidents = db.query(Incident).filter(Incident.id.in_(target_inc_ids)).all()
-    incidents_map = {inc.id: inc for inc in incidents}
+    # Query all cases linked
+    cases = db.query(CaseMaster).filter(CaseMaster.CaseMasterID.in_(target_case_ids)).all()
+    cases_map = {c.CaseMasterID: c for c in cases}
 
-    # Query all accused in the database to find co-accused
-    all_accused = db.query(Accused).all()
-    co_accused_list = []
+    # Query all co-accused links for these cases
+    co_links = db.query(Accused).filter(Accused.CaseMasterID.in_(target_case_ids)).all()
     
-    # We want to find any accused that shares at least one incident with our target accused
-    for acc in all_accused:
-        acc_inc_ids = parse_incident_ids(acc.past_incident_ids)
-        shared = set(target_inc_ids).intersection(set(acc_inc_ids))
-        if shared:
-            co_accused_list.append((acc, acc_inc_ids))
+    # Map PersonID -> Accused object (first link found) to represent the node
+    offenders = {}
+    for link in co_links:
+        if link.PersonID not in offenders:
+            offenders[link.PersonID] = link
 
-    # Build nodes and edges
+    # Add nodes and edges
     # 1. Add Accused nodes
-    for acc, acc_inc_ids in co_accused_list:
-        node_id = f"accused_{acc.id}"
-        G.add_node(node_id, label=acc.name, type="accused", risk_score=acc.risk_score)
+    for link in co_links:
+        node_id = f"accused_{link.PersonID}"
+        rep = offenders[link.PersonID]
+        G.add_node(
+            node_id, 
+            label=rep.AccusedName, 
+            type="accused", 
+            risk_score=rep.risk_score, 
+            age=rep.AgeYear, 
+            gender="Male" if rep.GenderID == 1 else "Female"
+        )
         
-        # Link accused to their incidents
-        for inc_id in acc_inc_ids:
-            if inc_id in incidents_map:
-                G.add_node(f"incident_{inc_id}", label=f"{incidents_map[inc_id].crime_type} ({incidents_map[inc_id].date})", type="incident", crime_type=incidents_map[inc_id].crime_type)
-                G.add_edge(node_id, f"incident_{inc_id}")
+        # Link accused to this case
+        case_node_id = f"incident_{link.CaseMasterID}"
+        if link.CaseMasterID in cases_map:
+            case_obj = cases_map[link.CaseMasterID]
+            crime_name = case_obj.minor_head_rel.CrimeHeadName if case_obj.minor_head_rel else "Crime"
+            G.add_node(
+                case_node_id, 
+                label=f"{crime_name} ({case_obj.CrimeRegisteredDate})", 
+                type="incident", 
+                crime_type=crime_name
+            )
+            G.add_edge(node_id, case_node_id)
 
-    # 2. Add Victims and Locations (Stations) linked to these incidents
-    for inc in incidents:
-        inc_node_id = f"incident_{inc.id}"
+    # 2. Add Victims and Locations (Stations) linked to these cases
+    for case_obj in cases:
+        case_node_id = f"incident_{case_obj.CaseMasterID}"
         
         # Add Location node
-        loc_node_id = f"location_{inc.station}"
-        G.add_node(loc_node_id, label=f"Station: {inc.station}", type="location")
-        G.add_edge(inc_node_id, loc_node_id)
+        station_name = case_obj.unit.UnitName if case_obj.unit else f"Station #{case_obj.PoliceStationID}"
+        loc_node_id = f"location_{station_name}"
+        G.add_node(loc_node_id, label=f"Station: {station_name}", type="location")
+        G.add_edge(case_node_id, loc_node_id)
         
         # Add Victim nodes
-        for vic in inc.victims:
-            vic_node_id = f"victim_{vic.id}"
-            G.add_node(vic_node_id, label=f"Victim ({vic.gender}, {vic.age})", type="victim", age=vic.age, gender=vic.gender)
-            G.add_edge(vic_node_id, inc_node_id)
+        for vic in case_obj.victims:
+            vic_node_id = f"victim_{vic.VictimMasterID}"
+            vic_gender = "Male" if vic.GenderID == 1 else "Female"
+            G.add_node(
+                vic_node_id, 
+                label=f"Victim ({vic_gender}, {vic.AgeYear})", 
+                type="victim", 
+                age=vic.AgeYear, 
+                gender=vic_gender
+            )
+            G.add_edge(vic_node_id, case_node_id)
 
     # Compute Centralities
     if len(G.nodes) > 0:
@@ -93,11 +108,8 @@ def build_network_graph(accused_id: int, db: Session):
     cytoscape_elements = []
 
     for node_id, attrs in G.nodes(data=True):
-        # Merge centrality attributes
         deg_c = round(float(degree_centrality.get(node_id, 0.0)), 3)
         bet_c = round(float(betweenness_centrality.get(node_id, 0.0)), 3)
-        
-        # Combined centrality score
         centrality_score = max(deg_c, bet_c)
 
         node_data = {
@@ -109,9 +121,10 @@ def build_network_graph(accused_id: int, db: Session):
             "centrality": centrality_score
         }
         
-        # Add type-specific attributes
         if attrs.get("type") == "accused":
             node_data["risk_score"] = attrs.get("risk_score", 0)
+            node_data["age"] = attrs.get("age")
+            node_data["gender"] = attrs.get("gender")
         elif attrs.get("type") == "victim":
             node_data["age"] = attrs.get("age")
             node_data["gender"] = attrs.get("gender")

@@ -62,10 +62,16 @@ export const api = {
   /**
    * Fetches DBSCAN crime hotspots
    * @param {string} [district] - Optional district filter
+   * @param {number} [eps] - Optional DBSCAN eps
+   * @param {number} [minSamples] - Optional DBSCAN min_samples
    * @returns {Promise<{type: "FeatureCollection", features: Array}>}
    */
-  getHotspots: (district) => {
-    const q = district ? `?district=${encodeURIComponent(district)}` : '';
+  getHotspots: (district, eps, minSamples) => {
+    const params = [];
+    if (district) params.push(`district=${encodeURIComponent(district)}`);
+    if (eps !== undefined && eps !== null) params.push(`eps=${eps}`);
+    if (minSamples !== undefined && minSamples !== null) params.push(`min_samples=${minSamples}`);
+    const q = params.length > 0 ? `?${params.join('&')}` : '';
     return request(`/api/hotspots${q}`);
   },
 
@@ -101,5 +107,55 @@ export const api = {
    */
   getAccusedByDistrict: (district) => {
     return request(`/api/risk/accused?district=${encodeURIComponent(district)}`);
+  },
+
+  /**
+   * Predicts risk score based on custom socioeconomic inputs
+   * @param {object} params - Input params
+   * @param {number} params.population - Population
+   * @param {number} params.unemployment_rate - Unemployment rate
+   * @param {number} params.urbanization_index - Urbanization index
+   * @param {number} params.literacy_rate - Literacy rate
+   * @param {number} params.incident_count - Incident count
+   * @returns {Promise<{predicted_risk_score: number, risk_level: string, probabilities: {Low: number, Medium: number, High: number}}>}
+   */
+  predictRiskScore: ({ population, unemployment_rate, urbanization_index, literacy_rate, incident_count }) => {
+    const q = `population=${population}&unemployment_rate=${unemployment_rate}&urbanization_index=${urbanization_index}&literacy_rate=${literacy_rate}&incident_count=${incident_count}`;
+    return request(`/api/risk/predict?${q}`);
+  },
+
+  /**
+   * Fetches recent incidents list
+   * @param {string} [district] - Optional district filter
+   * @param {number} [limit=50] - Maximum count
+   * @returns {Promise<Array>} List of incidents
+   */
+  getIncidents: (district, limit = 50) => {
+    const params = [];
+    if (district && district !== 'All') params.push(`district=${encodeURIComponent(district)}`);
+    if (limit) params.push(`limit=${limit}`);
+    const q = params.length > 0 ? `?${params.join('&')}` : '';
+    return request(`/api/risk/incidents${q}`);
+  },
+
+  /**
+   * Updates the status of an incident in the database
+   * @param {number} incidentId - Incident ID
+   * @param {string} status - New status
+   * @returns {Promise<{status: string, incident_id: number, new_status: string}>}
+   */
+  updateIncidentStatus: (incidentId, status) => {
+    return request(`/api/risk/incidents/${incidentId}/status?status=${encodeURIComponent(status)}`, {
+      method: 'POST'
+    });
+  },
+
+  /**
+   * Fetches accused persons linked to a specific incident ID
+   * @param {number} incidentId - Incident ID
+   * @returns {Promise<Array>} List of accused persons
+   */
+  getIncidentAccused: (incidentId) => {
+    return request(`/api/risk/incidents/${incidentId}/accused`);
   }
 };

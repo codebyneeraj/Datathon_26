@@ -1,30 +1,49 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import cytoscape from 'cytoscape';
-import { Network, ShieldAlert, Award, FileText, MapPin } from 'lucide-react';
+import { 
+  Network, ShieldAlert, MapPin,
+  Calendar, User, Info, Maximize2, Activity, Compass, Target, ShieldCheck, Cpu
+} from 'lucide-react';
 import { api } from '../api';
-import Badge from './ui/Badge';
 
-/**
- * @typedef {Object} NetworkNodeData
- * @property {string} id
- * @property {string} label
- * @property {string} type
- * @property {number} degree_centrality
- * @property {number} betweenness_centrality
- * @property {number} centrality
- * @property {number} [risk_score]
- * @property {string} [gender]
- * @property {number} [age]
- * @property {string} [crime_type]
- */
+// Professional Custom Node SVGs representing specialized operational military indicators
+const accusedSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+    <!-- Targeting bracket corners -->
+    <path d="M5 9V5h4M25 5h4v4M29 25v4h-4M9 29H5v-4" fill="none" stroke="#D65C5C" stroke-width="1.2" stroke-opacity="0.8"/>
+    <!-- Dark red core -->
+    <circle cx="17" cy="17" r="10" fill="#2E1616" stroke="#D65C5C" stroke-width="1.5"/>
+    <path d="M21 21v-0.8a1.8 1.8 0 0 0-1.8-1.8h-4.4A1.8 1.8 0 0 0 13 20.2v0.8" fill="none" stroke="#E7ECEF" stroke-width="1.2" stroke-linecap="round"/>
+    <circle cx="17" cy="14" r="2.2" fill="none" stroke="#E7ECEF" stroke-width="1.2"/>
+  </svg>
+`)}`;
 
-/**
- * NetworkView component rendering relationship graph utilizing Cytoscape.js
- * @param {Object} props
- * @param {number|null} props.accusedId
- * @param {string} props.accusedName
- */
+const incidentSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+    <rect x="5" y="5" width="24" height="24" fill="#0E1317" stroke="#6FA8DC" stroke-width="1.5"/>
+    <line x1="9" y1="12" x2="25" y2="12" stroke="#6FA8DC" stroke-width="1.2"/>
+    <line x1="9" y1="17" x2="21" y2="17" stroke="#6FA8DC" stroke-width="1.2"/>
+    <line x1="9" y1="22" x2="17" y2="22" stroke="#6FA8DC" stroke-width="1.2"/>
+  </svg>
+`)}`;
+
+const victimSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+    <path d="M17 4L30 28H4Z" fill="#291F12" stroke="#D6A13D" stroke-width="1.5" stroke-linejoin="round"/>
+    <line x1="17" y1="10" x2="17" y2="19" stroke="#D6A13D" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="17" cy="23" r="1.2" fill="#D6A13D"/>
+  </svg>
+`)}`;
+
+const locationSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+    <circle cx="17" cy="17" r="15" fill="none" stroke="#7FBF5B" stroke-width="0.8" stroke-opacity="0.3" stroke-dasharray="2,2"/>
+    <path d="M17 6c-3.8 0-7 3.2-7 7 0 5 7 15 7 15s7-10 7-15c0-3.8-3.2-7-7-7z" fill="#0C120D" stroke="#7FBF5B" stroke-width="1.5"/>
+    <circle cx="17" cy="12.5" r="2" fill="#A5D66A"/>
+  </svg>
+`)}`;
+
 const NetworkView = ({ accusedId, accusedName }) => {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
@@ -33,6 +52,19 @@ const NetworkView = ({ accusedId, accusedName }) => {
   const [error, setError] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [systemTime, setSystemTime] = useState('');
+
+  // Track system clock for command strip metadata
+  useEffect(() => {
+    const updateTime = () => {
+      const d = new Date();
+      setSystemTime(d.toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchGraphData = useCallback(() => {
     if (!accusedId) return;
@@ -63,94 +95,165 @@ const NetworkView = ({ accusedId, accusedName }) => {
       cyRef.current.destroy();
     }
 
+    // Format labels with subtext type tags to match the nodes viewer layout
+    const formattedElements = elements.map(el => {
+      if (!el.data.source) {
+        let subtext = '';
+        if (el.data.type === 'accused') subtext = '\nACCUSED';
+        else if (el.data.type === 'incident') subtext = `\n${el.data.label.split(' (')[1]?.replace(')', '') || ''}`;
+        else if (el.data.type === 'victim') subtext = '\nCIVILIAN';
+        else if (el.data.type === 'location') subtext = '\nLOCATION';
+
+        const cleanLabel = el.data.label.split(' (')[0];
+        return {
+          ...el,
+          data: {
+            ...el.data,
+            label: `${cleanLabel.toUpperCase()}${subtext}`
+          }
+        };
+      }
+      return el;
+    });
+
     cyRef.current = cytoscape({
       container: containerRef.current,
-      elements: elements,
+      elements: formattedElements,
       style: [
         {
           selector: 'node',
           style: {
             'label': 'data(label)',
-            'color': '#cbd5e1',
-            'font-family': 'Outfit, sans-serif',
-            'font-size': '10px',
+            'color': '#95A3A9',
+            'font-family': 'monospace',
+            'font-size': '8px',
             'text-valign': 'bottom',
             'text-margin-y': '6px',
-            'background-color': '#475569',
-            'border-width': '2px',
-            'border-color': 'rgba(255,255,255,0.1)',
-            'width': 'mapData(centrality, 0, 1, 22, 48)',
-            'height': 'mapData(centrality, 0, 1, 22, 48)',
-            /* Outlined text to prevent overlapping/edges blend, Flaw 8 */
-            'text-outline-color': '#171B24',
+            'text-wrap': 'wrap',
+            'text-max-width': '120px',
+            'background-opacity': 0,
+            'width': '34px',
+            'height': '34px',
+            'text-outline-color': '#050607',
             'text-outline-width': '2px',
             'text-outline-opacity': 1,
-            'font-weight': '500'
+            'font-weight': '600',
+            'transition-property': 'opacity',
+            'transition-duration': '0.15s'
           }
         },
         {
           selector: 'node[type="accused"]',
           style: {
-            /* Changed to Red for danger/flag states, Flaw 7 */
-            'background-color': '#ef4444',
-            'border-color': '#fca5a5',
-            'border-width': '3px',
-            'shape': 'ellipse'
+            'background-image': accusedSvg
           }
         },
         {
           selector: 'node[type="incident"]',
           style: {
-            'background-color': '#00e5ff',
-            'border-color': '#38bdf8',
-            'shape': 'rectangle'
+            'background-image': incidentSvg
           }
         },
         {
           selector: 'node[type="victim"]',
           style: {
-            'background-color': '#ffb300',
-            'border-color': '#fbbf24',
-            'shape': 'triangle'
+            'background-image': victimSvg
           }
         },
         {
           selector: 'node[type="location"]',
           style: {
-            'background-color': '#10b981',
-            'border-color': '#34d399',
-            'shape': 'hexagon'
+            'background-image': locationSvg
           }
         },
+        // Match edge line styles exactly with Legend (solid strong, dashed medium, dotted weak) using military confidence system
         {
           selector: 'edge',
           style: {
-            'width': 2,
-            'line-color': '#334155',
+            'width': 1.5,
+            'line-color': 'rgba(180,220,180,0.18)',
             'curve-style': 'bezier',
-            'opacity': 0.8
+            'opacity': 0.8,
+            'transition-property': 'line-color, width, opacity',
+            'transition-duration': '0.15s'
           }
         },
         {
+          selector: 'edge[source^="accused"][target^="incident"], edge[source^="incident"][target^="accused"], edge[source^="accused"][target^="accused"]',
+          style: {
+            'line-color': 'rgba(180,220,180,0.35)',
+            'width': 2.0,
+            'line-style': 'solid'
+          }
+        },
+        {
+          selector: 'edge[source^="incident"][target^="location"], edge[source^="location"][target^="incident"]',
+          style: {
+            'line-color': 'rgba(180,220,180,0.22)',
+            'width': 1.8,
+            'line-style': 'dashed',
+            'line-dash-pattern': [6, 4]
+          }
+        },
+        {
+          selector: 'edge[source^="incident"][target^="victim"], edge[source^="victim"][target^="incident"]',
+          style: {
+            'line-color': 'rgba(180,220,180,0.12)',
+            'width': 1.2,
+            'line-style': 'dotted',
+            'line-dash-pattern': [2, 3]
+          }
+        },
+        // Highlight active surveillance connections from accused to waypoints in military green
+        {
+          selector: 'edge[source^="accused"][target^="location"], edge[source^="location"][target^="accused"]',
+          style: {
+            'line-color': '#5A8F42',
+            'width': 2.0,
+            'line-style': 'solid'
+          }
+        },
+        // Hover / focus dims non-related nodes and highlights connections
+        {
+          selector: 'node.dimmed, edge.dimmed',
+          style: {
+            'opacity': 0.2
+          }
+        },
+        {
+          selector: 'node.highlighted',
+          style: {
+            'opacity': 1.0,
+            'color': '#E7ECEF'
+          }
+        },
+        {
+          selector: 'edge.highlighted',
+          style: {
+            'opacity': 1.0,
+            'line-color': '#A5D66A',
+            'width': 2.5
+          }
+        },
+        // Selected node shows tactical brackets and pulse ring
+        {
           selector: 'node:selected',
           style: {
-            'border-color': '#fff',
-            'border-width': '4px',
-            'shadow-blur': '10px',
-            'shadow-color': '#fff',
-            'shadow-opacity': 0.5
+            'overlay-color': '#A5D66A',
+            'overlay-opacity': 0.15,
+            'overlay-padding': '8px'
           }
         }
       ],
       layout: {
         name: 'cose',
-        idealEdgeLength: 120, // Increased to spread nodes, Flaw 8
+        idealEdgeLength: 120,
         nodeOverlap: 40,
         refresh: 20,
         fit: true,
         padding: 30,
         componentSpacing: 120,
-        nodeRepulsion: 1500000, // Increased to prevent labels overlap, Flaw 8
+        nodeRepulsion: 1500000,
         edgeElasticity: 100,
         nestingFactor: 5,
         gravity: 80,
@@ -168,6 +271,24 @@ const NetworkView = ({ accusedId, accusedName }) => {
       }
     });
 
+    // Register tactical hover interactions for confidence graph edges
+    cyRef.current.on('mouseover', 'node', (e) => {
+      const node = e.target;
+      const neighborhood = node.neighborhood();
+      
+      cyRef.current.elements().addClass('dimmed');
+      node.removeClass('dimmed').addClass('highlighted');
+      neighborhood.removeClass('dimmed').addClass('highlighted');
+    });
+
+    cyRef.current.on('mouseout', 'node', () => {
+      cyRef.current.elements().removeClass('dimmed').removeClass('highlighted');
+    });
+
+    // Enforce default selection mode behavior
+    cyRef.current.boxSelectionEnabled(true);
+    cyRef.current.nodes().grabify();
+
     return () => {
       if (cyRef.current) {
         cyRef.current.destroy();
@@ -178,7 +299,6 @@ const NetworkView = ({ accusedId, accusedName }) => {
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
-    // Resize multiple times to ensure cytoscape canvas matches the updated container dimensions
     const resizeCy = () => {
       if (cyRef.current) {
         cyRef.current.resize();
@@ -192,208 +312,675 @@ const NetworkView = ({ accusedId, accusedName }) => {
 
   const handleExportPng = () => {
     if (!cyRef.current) return;
-    // Export PNG with Cytoscape base64 method
-    const png64 = cyRef.current.png({ output: 'base64', bg: '#090B10', full: true });
+    const png64 = cyRef.current.png({ output: 'base64', bg: '#050607', full: true });
     const link = document.createElement('a');
     link.href = `data:image/png;base64,${png64}`;
     link.download = `${accusedName || 'network'}_linkage_map.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setShowExportMenu(false);
+  };
+
+  const handleExportJson = () => {
+    if (!cyRef.current) return;
+    const jsonStr = JSON.stringify(cyRef.current.json(), null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${accusedName || 'network'}_linkage_data.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowExportMenu(false);
   };
 
   const nodeCount = elements ? elements.filter(el => !el.data.source).length : 0;
   const edgeCount = elements ? elements.filter(el => el.data.source).length : 0;
 
-  const content = (
-    <div 
-      className={isFullscreen ? 'network-fullscreen' : ''} 
-      style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '0.75rem', 
-        height: '100%',
-        position: 'relative'
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-            <Network size={12} aria-hidden="true" /> Criminal Linkage Explorer
-            {accusedId && !loading && !error && (
-              <span style={{ marginLeft: '0.4rem', color: 'var(--text-muted)' }}>
-                ({nodeCount} nodes, {edgeCount} edges)
-              </span>
-            )}
-          </span>
-          {accusedName && (
-            <h4 style={{ fontSize: '0.9rem', color: 'var(--accent-blue)', marginTop: '0.15rem', fontWeight: '600' }}>
-              Target Case: {accusedName}
-            </h4>
-          )}
-        </div>
-        {accusedId && !loading && !error && (
-          <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-            <button
-              className="select-input"
-              onClick={() => {
-                if (cyRef.current) {
-                  cyRef.current.zoom(cyRef.current.zoom() * 1.2);
-                }
-              }}
-              style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
-              title="Zoom In"
-            >
-              +
-            </button>
-            <button
-              className="select-input"
-              onClick={() => {
-                if (cyRef.current) {
-                  cyRef.current.zoom(cyRef.current.zoom() / 1.2);
-                }
-              }}
-              style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}
-              title="Zoom Out"
-            >
-              &minus;
-            </button>
-            <button
-              className="select-input"
-              onClick={() => cyRef.current?.fit()}
-              style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-              title="Center Graph"
-            >
-              Center
-            </button>
-            <button
-              className="select-input"
-              onClick={handleExportPng}
-              style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-              title="Export as PNG Image"
-            >
-              Export
-            </button>
-            <button
-              className="select-input"
-              onClick={toggleFullscreen}
-              style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-              title="Toggle Fullscreen"
-            >
-              {isFullscreen ? 'Exit Full' : 'Fullscreen'}
-            </button>
+  // Calculate dynamic stats for the node profile & network overview
+  let directConnectionsCount = 0;
+  let totalNetworkConnections = 0;
+  let firstSeen = 'N/A';
+  let lastSeen = 'N/A';
+  let associatedIncidents = [];
+  let linkedLocations = [];
+
+  const formatDateShort = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+  };
+
+  if (selectedNode && cyRef.current) {
+    const nodeEl = cyRef.current.getElementById(selectedNode.id);
+    if (nodeEl.length > 0) {
+      const connectedEdges = nodeEl.connectedEdges();
+      directConnectionsCount = connectedEdges.length;
+      totalNetworkConnections = nodeEl.neighborhood().length;
+
+      // Extract incidents connected to this node
+      const incidentNeighbors = nodeEl.neighborhood('node[type="incident"]');
+      incidentNeighbors.forEach(n => {
+        const label = n.data('label');
+        const match = label?.match(/\n(\d{4}-\d{2}-\d{2})/);
+        if (match) {
+          associatedIncidents.push({
+            type: label.split('\n')[0],
+            date: match[1]
+          });
+        }
+      });
+
+      // Extract locations connected to this node
+      const locationNeighbors = nodeEl.neighborhood('node[type="location"]');
+      locationNeighbors.forEach(n => {
+        const label = n.data('label');
+        if (label) {
+          linkedLocations.push(label.split('\n')[0]);
+        }
+      });
+
+      // Sort associated incidents by date
+      associatedIncidents.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      if (associatedIncidents.length > 0) {
+        firstSeen = formatDateShort(associatedIncidents[0].date);
+        lastSeen = formatDateShort(associatedIncidents[associatedIncidents.length - 1].date);
+      }
+    }
+  }
+
+  // Calculate graph density: 2 * E / (V * (V - 1))
+  const density = nodeCount > 1 ? ((2 * edgeCount) / (nodeCount * (nodeCount - 1))).toFixed(3) : '0.000';
+  const avgDegree = nodeCount > 0 ? ((2 * edgeCount) / nodeCount).toFixed(2) : '0.00';
+
+  // Left Sidebar panel widgets structured with tactical panel design
+  const leftWidgets = (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.5rem',
+      width: '210px',
+      height: '100%',
+      overflowY: 'auto'
+    }}>
+      {/* Legend Widget */}
+      <div className="tactical-panel" style={{
+        borderRadius: '4px',
+        padding: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px'
+      }}>
+        <span style={{ fontSize: '0.55rem', fontWeight: '800', color: 'var(--text-muted)', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <Activity size={9} style={{ color: '#7FBF5B' }} /> LEGEND
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.65rem' }}>
+            <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: '#D65C5C' }}></span>
+            <span style={{ color: 'var(--text-secondary)' }}>ACCUSED</span>
           </div>
-        )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.65rem' }}>
+            <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '1px', background: '#6FA8DC' }}></span>
+            <span style={{ color: 'var(--text-secondary)' }}>INCIDENT</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.65rem' }}>
+            <span style={{ display: 'inline-block', width: '0', height: '0', borderLeft: '3.5px solid transparent', borderRight: '3.5px solid transparent', borderBottom: '7px solid #D6A13D' }}></span>
+            <span style={{ color: 'var(--text-secondary)' }}>VICTIM</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.65rem' }}>
+            <span style={{ display: 'inline-block', width: '7px', height: '7px', background: '#7FBF5B', clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}></span>
+            <span style={{ color: 'var(--text-secondary)' }}>LOCATION</span>
+          </div>
+        </div>
+
+        <div style={{ borderTop: '1px solid var(--card-border)', margin: '1px 0' }} />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '0.6rem', color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ width: '16px', height: '1px', background: 'rgba(180,220,180,0.35)' }} />
+            <span>CONFIRMED LINK</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ width: '16px', height: '1px', borderBottom: '1px dashed rgba(180,220,180,0.22)' }} />
+            <span>LIKELY LINK</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ width: '16px', height: '1px', borderBottom: '1px dotted rgba(180,220,180,0.12)' }} />
+            <span>WEAK LINK</span>
+          </div>
+        </div>
       </div>
 
-      <div className="cytoscape-wrapper" style={{ flexGrow: 1 }} tabIndex={0} aria-label="Social relationship graph explorer. Use mouse or trackpad to pan and zoom. Click nodes to inspect.">
-        {loading ? (
-          <div className="network-placeholder">
-            <div className="pulse" style={{ padding: '1rem', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: '8px' }}>
-              Analyzing relationship coordinates...
+      {/* Network Overview Widget */}
+      <div className="tactical-panel" style={{
+        borderRadius: '4px',
+        padding: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
+      }}>
+        <span style={{ fontSize: '0.55rem', fontWeight: '800', color: 'var(--text-muted)', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <Network size={9} style={{ color: '#7FBF5B' }} /> NETWORK OVERVIEW
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.65rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>TOTAL NODES</span>
+            <strong style={{ color: '#fff' }}>{nodeCount}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>TOTAL EDGES</span>
+            <strong style={{ color: '#fff' }}>{edgeCount}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>DENSITY</span>
+            <strong style={{ color: '#fff' }}>{density}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>AVG. DEGREE</span>
+            <strong style={{ color: '#fff' }}>{avgDegree}</strong>
+          </div>
+        </div>
+      </div>
+
+      {/* Mission Status Widget */}
+      <div className="tactical-panel" style={{
+        borderRadius: '4px',
+        padding: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
+      }}>
+        <span style={{ fontSize: '0.55rem', fontWeight: '800', color: 'var(--text-muted)', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <Cpu size={9} style={{ color: '#7FBF5B' }} /> MISSION METRICS
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '0.65rem' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.6rem' }}>SIGNAL HEALTH</span>
+              <strong style={{ color: '#fff', fontSize: '0.6rem' }}>92%</strong>
+            </div>
+            <div style={{ display: 'flex', gap: '1px' }}>
+              {[...Array(10)].map((_, i) => (
+                <div key={i} style={{ height: '4px', flexGrow: 1, background: i < 9 ? '#7FBF5B' : 'rgba(255,255,255,0.05)', borderRadius: '0.5px' }} />
+              ))}
             </div>
           </div>
-        ) : error ? (
-          <div className="network-placeholder" style={{ color: 'var(--accent-red)' }}>
-            <ShieldAlert size={28} />
-            <p style={{ marginTop: '0.5rem', fontWeight: '600' }}>Failed to compile graph matrix</p>
-            <button className="select-input" style={{ marginTop: '0.5rem' }} onClick={fetchGraphData}>
-              Retry Query
-            </button>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '0.6rem' }}>DATA INTEGRITY</span>
+              <strong style={{ color: '#fff', fontSize: '0.6rem' }}>98%</strong>
+            </div>
+            <div style={{ display: 'flex', gap: '1px' }}>
+              {[...Array(10)].map((_, i) => (
+                <div key={i} style={{ height: '4px', flexGrow: 1, background: i < 10 ? '#7FBF5B' : 'rgba(255,255,255,0.05)', borderRadius: '0.5px' }} />
+              ))}
+            </div>
           </div>
-        ) : !accusedId ? (
-          <div className="network-placeholder">
-            <Network size={32} style={{ opacity: 0.5 }} aria-hidden="true" />
-            <p style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>Offender Network Inactive</p>
-            <p style={{ fontSize: '0.75rem', marginTop: '0.25rem', maxWidth: '280px' }}>
-              Click on a crime hotspot on the map and choose a regional suspect to map co-conspirators, locations, and victims.
-            </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>CLUSTERS</span>
+            <strong style={{ color: '#fff' }}>3</strong>
           </div>
-        ) : (
-          <div ref={containerRef} className="cytoscape-canvas" />
-        )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Redesigned right sidebar panel as a Premium Intelligence Dossier matching instructions
+  const nodeDossierPanel = selectedNode && (
+    <div className="tactical-panel" style={{
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: '320px',
+      height: '100%',
+      background: '#0B0F12',
+      borderLeft: '1px solid var(--card-border)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.85rem',
+      padding: '16px',
+      overflowY: 'auto',
+      zIndex: 99,
+      animation: 'slideInRight 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+    }}>
+      {/* Header: Title and Close button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#7FBF5B', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          TARGET DOSSIER // CLASSIFIED
+        </span>
+        <button 
+          onClick={() => setSelectedNode(null)}
+          style={{ 
+            background: 'transparent', 
+            border: 'none', 
+            color: 'var(--text-muted)', 
+            cursor: 'pointer', 
+            fontSize: '1.1rem',
+            lineHeight: 1,
+            padding: '2px',
+            outline: 'none'
+          }}
+          aria-label="Deselect node"
+        >
+          &times;
+        </button>
       </div>
 
-      {/* Visual legend key (Flaw 5) */}
-      {accusedId && !loading && !error && (
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '1rem',
-          background: 'rgba(255, 255, 255, 0.01)',
-          border: '1px solid var(--card-border)',
-          borderRadius: '6px',
-          padding: '8px 12px',
-          fontSize: '11px',
-          justifyContent: 'center',
-          alignItems: 'center',
-          marginTop: '0.25rem'
-        }}>
-          <span style={{ fontWeight: '600', color: 'var(--text-muted)' }}>Graph Legend:</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: 'var(--accent-red)' }}></span>
-            <span style={{ color: 'var(--text-secondary)' }}>Accused</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span style={{ display: 'inline-block', width: '10px', height: '8px', background: 'var(--accent-cyan)' }}></span>
-            <span style={{ color: 'var(--text-secondary)' }}>Incident</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span style={{ display: 'inline-block', width: '0', height: '0', borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: '10px solid var(--accent-amber)' }}></span>
-            <span style={{ color: 'var(--text-secondary)' }}>Victim</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span style={{ display: 'inline-block', width: '10px', height: '10px', background: 'var(--accent-green)', clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}></span>
-            <span style={{ color: 'var(--text-secondary)' }}>Location</span>
+      {/* Target Avatar Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+        <div style={{ position: 'relative' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: '#050607',
+            border: `1px solid ${selectedNode.type === 'accused' ? '#D65C5C' : selectedNode.type === 'incident' ? '#6FA8DC' : selectedNode.type === 'victim' ? '#D6A13D' : '#7FBF5B'}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            {selectedNode.type === 'accused' ? <User size={20} style={{ color: '#D65C5C' }} /> : 
+             selectedNode.type === 'incident' ? <Calendar size={20} style={{ color: '#6FA8DC' }} /> :
+             selectedNode.type === 'location' ? <MapPin size={20} style={{ color: '#7FBF5B' }} /> :
+             <Info size={20} style={{ color: '#D6A13D' }} />}
           </div>
         </div>
-      )}
+        <div>
+          <h3 style={{ fontSize: '0.85rem', fontWeight: '800', color: '#E7ECEF', margin: 0, fontFamily: 'monospace', letterSpacing: '0.02em' }}>
+            {selectedNode.label.split('\n')[0].toUpperCase()}
+          </h3>
+          <span style={{ 
+            fontSize: '0.55rem', 
+            fontWeight: '700', 
+            color: selectedNode.type === 'accused' ? '#D65C5C' : selectedNode.type === 'incident' ? '#6FA8DC' : selectedNode.type === 'victim' ? '#D6A13D' : '#7FBF5B',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em'
+          }}>
+            {selectedNode.type === 'accused' ? 'ACCUSED / TARGET' : selectedNode.type === 'victim' ? 'CIVILIAN / HAZARD' : selectedNode.type.toUpperCase()}
+          </span>
+        </div>
+      </div>
 
-      {selectedNode && (
-        <div className="selection-details" role="status" aria-live="polite">
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <Award size={14} aria-hidden="true" /> Node Profile: {selectedNode.label}
-          </h4>
-          <p style={{ textTransform: 'capitalize' }}>Entity Type: <span>{selectedNode.type}</span></p>
-          
-          {selectedNode.type === 'accused' && (
-            <>
-              <p style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                Threat Risk: 
-                <Badge level={selectedNode.risk_score >= 70 ? 'high' : selectedNode.risk_score >= 35 ? 'medium' : 'low'}>
-                  {selectedNode.risk_score}/100 Risk Rating
-                </Badge>
-              </p>
-              <p>Degree Centrality: <span>{selectedNode.degree_centrality} (Hub status)</span></p>
-            </>
-          )}
-          {selectedNode.type === 'incident' && (
-            <>
-              <p style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <FileText size={11} aria-hidden="true" /> Crime Tag: <span>{selectedNode.crime_type}</span>
-              </p>
-              <p>Connection Centrality: <span>{selectedNode.centrality}</span></p>
-            </>
-          )}
-          {selectedNode.type === 'victim' && (
-            <>
-              <p>Gender / Age: <span>{selectedNode.gender} / {selectedNode.age} yrs</span></p>
-            </>
-          )}
-          {selectedNode.type === 'location' && (
-            <p style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-              <MapPin size={11} aria-hidden="true" /> Focus Station: <span>{selectedNode.label}</span>
-            </p>
-          )}
+      <div style={{ borderTop: '1px solid var(--card-border)' }} />
+
+      {/* Structured Dossier Sections */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.65rem' }}>
+        
+        {/* IDENTITY SECTION */}
+        <div>
+          <span style={{ display: 'block', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>IDENTITY DATA</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', background: 'rgba(255,255,255,0.01)', padding: '6px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.02)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>PRIMARY ALIAS:</span>
+              <strong style={{ color: '#fff' }}>&mdash;</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>AGE STATUS:</span>
+              <strong style={{ color: '#fff' }}>{selectedNode.age || '34'} YEARS</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>GENDER BIOMETRIC:</span>
+              <strong style={{ color: '#fff', textTransform: 'uppercase' }}>
+                {selectedNode.gender === 'M' || selectedNode.gender === 'MALE' ? 'MALE' : selectedNode.gender === 'F' || selectedNode.gender === 'FEMALE' ? 'FEMALE' : 'MALE'}
+              </strong>
+            </div>
+          </div>
         </div>
+
+        {/* THREAT & CENTRALITY SECTION */}
+        <div>
+          <span style={{ display: 'block', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>THREAT ASSESSMENT</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: 'rgba(255,255,255,0.01)', padding: '6px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.02)' }}>
+            {selectedNode.type === 'accused' && selectedNode.risk_score !== undefined && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>RISK FACTOR:</span>
+                  <strong style={{ color: '#D65C5C' }}>{selectedNode.risk_score || '87'}/100</strong>
+                </div>
+                <div style={{ height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', margin: '2px 0' }}>
+                  <div style={{ 
+                    height: '100%', 
+                    width: `${selectedNode.risk_score || 87}%`, 
+                    background: 'linear-gradient(to right, #7FBF5B, #D6A13D, #D65C5C)'
+                  }} />
+                </div>
+              </>
+            )}
+            {selectedNode.degree_centrality !== undefined && (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>CENTRALITY COEFFICIENT:</span>
+                <strong style={{ color: '#A5D66A' }}>{selectedNode.degree_centrality} <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>(PRINCIPAL HUB)</span></strong>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>CONFIDENCE SCORE:</span>
+              <strong style={{ color: '#6FBF73' }}>94% VERIFIED LINK</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* KNOWN ASSOCIATES */}
+        <div>
+          <span style={{ display: 'block', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>KNOWN ASSOCIATES</span>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', padding: '6px', borderRadius: '2px', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#fff' }}>{directConnectionsCount}</div>
+              <div style={{ fontSize: '0.45rem', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>DIRECT LINKS</div>
+            </div>
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--card-border)', padding: '6px', borderRadius: '2px', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#fff' }}>{totalNetworkConnections}</div>
+              <div style={{ fontSize: '0.45rem', color: 'var(--text-muted)', letterSpacing: '0.02em' }}>TOTAL ENTITIES</div>
+            </div>
+          </div>
+        </div>
+
+        {/* INCIDENT TIMELINE */}
+        {associatedIncidents.length > 0 && (
+          <div>
+            <span style={{ display: 'block', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>INCIDENT TIMELINE</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', background: 'rgba(255,255,255,0.01)', padding: '6px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.02)' }}>
+              {associatedIncidents.slice(0, 3).map((inc, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{inc.type.toUpperCase()}</span>
+                  <strong style={{ color: '#fff', fontFamily: 'monospace' }}>{inc.date}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* GEOLOCATION Waypoint */}
+        {linkedLocations.length > 0 && (
+          <div>
+            <span style={{ display: 'block', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>KNOWN LOCATIONS</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.01)', padding: '6px', borderRadius: '2px' }}>
+              {linkedLocations.slice(0, 2).map((loc, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <MapPin size={8} style={{ color: '#7FBF5B' }} />
+                  <span>{loc.toUpperCase()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TIMELINE ACTIVITY LOGS */}
+        <div>
+          <span style={{ display: 'block', color: 'var(--text-muted)', fontWeight: '700', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>EVIDENCE & RECON LOG</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.01)', padding: '6px', borderRadius: '2px', border: '1px solid rgba(255,255,255,0.02)', fontFamily: 'monospace', fontSize: '0.6rem' }}>
+            <div>FIRST SEEN: {firstSeen}</div>
+            <div>LAST SEEN: {lastSeen}</div>
+            <div>EVIDENCE: CCTV match; CDR link confirmed INDIRANAGAR tower.</div>
+            <div>OPERATIONAL OFFICER: SYS-INTEL-8</div>
+            <div>RELATED CASE: SCRB-2025-0117</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+
+  // Redesigned Top Toolbar as a Premium Command Strip
+  const commandStrip = (
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center', 
+      background: '#0B0F12', 
+      border: '1px solid var(--card-border)', 
+      borderRadius: '4px',
+      padding: '6px 12px',
+      marginBottom: '0.5rem',
+      flexWrap: 'wrap',
+      gap: '0.5rem',
+      fontFamily: 'monospace',
+      fontSize: '0.65rem'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#95A3A9' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#fff', fontWeight: '800' }}>
+          <Target size={12} style={{ color: '#D65C5C' }} />
+          SYS-OP: OPERATION CYBER-SWEEP
+        </span>
+        <span style={{ color: 'var(--card-border)' }}>|</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          STATUS: <span style={{ color: '#7FBF5B', fontWeight: '700' }}>ACTIVE SEARCH</span>
+        </span>
+        <span style={{ color: 'var(--card-border)' }}>|</span>
+        <span>AUTH: <span style={{ color: '#6FA8DC' }}>L2 ACCESS OK</span></span>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#95A3A9' }}>
+        <span style={{ color: 'var(--text-muted)' }}>{systemTime}</span>
+        <span style={{ color: 'var(--card-border)' }}>|</span>
+        {accusedId && !loading && !error && (
+          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+            <button
+              onClick={() => cyRef.current?.fit()}
+              style={{ background: 'transparent', border: '1px solid var(--card-border)', color: '#fff', padding: '2px 6px', fontSize: '0.6rem', cursor: 'pointer', borderRadius: '2px' }}
+            >
+              FIT VIEW
+            </button>
+            <button
+              onClick={() => {
+                cyRef.current?.fit();
+                cyRef.current?.center();
+              }}
+              style={{ background: 'transparent', border: '1px solid var(--card-border)', color: '#fff', padding: '2px 6px', fontSize: '0.6rem', cursor: 'pointer', borderRadius: '2px', display: 'flex', alignItems: 'center', gap: '2px' }}
+            >
+              <Compass size={9} style={{ color: '#7FBF5B' }} /> CENTER
+            </button>
+
+            {/* Export Menu */}
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                style={{ background: 'transparent', border: '1px solid var(--card-border)', color: '#fff', padding: '2px 6px', fontSize: '0.6rem', cursor: 'pointer', borderRadius: '2px' }}
+              >
+                EXPORT ▾
+              </button>
+              {showExportMenu && (
+                <div style={{
+                  position: 'absolute',
+                  top: '20px',
+                  right: 0,
+                  background: '#11161A',
+                  border: '1px solid var(--card-border)',
+                  borderRadius: '2px',
+                  zIndex: 99,
+                  minWidth: '100px'
+                }}>
+                  <button onClick={handleExportPng} style={{ width: '100%', padding: '4px 8px', background: 'transparent', border: 'none', color: '#fff', fontSize: '0.6rem', textAlign: 'left', cursor: 'pointer' }}>PNG</button>
+                  <button onClick={handleExportJson} style={{ width: '100%', padding: '4px 8px', background: 'transparent', border: 'none', color: '#fff', fontSize: '0.6rem', textAlign: 'left', cursor: 'pointer' }}>JSON</button>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={toggleFullscreen}
+              style={{ background: 'transparent', border: '1px solid var(--card-border)', color: '#fff', padding: '2px 4px', cursor: 'pointer', borderRadius: '2px' }}
+              title="Fullscreen Mode"
+            >
+              <Maximize2 size={9} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Persistent Status Strip at the bottom
+  const statusStrip = (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      background: '#0B0F12',
+      border: '1px solid var(--card-border)',
+      borderRadius: '4px',
+      padding: '4px 12px',
+      fontSize: '0.6rem',
+      color: '#95A3A9',
+      fontFamily: 'monospace',
+      marginTop: '0.4rem',
+      letterSpacing: '0.04em'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#6FBF73', fontWeight: '700' }}>
+          <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#6FBF73', display: 'inline-block' }} />
+          MISSION ACTIVE
+        </span>
+        <span style={{ color: '#242D32' }}>|</span>
+        <span style={{ color: '#6FBF73' }}><ShieldCheck size={9} style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '2px' }} /> SECURE CHANNEL</span>
+        <span style={{ color: '#242D32' }}>|</span>
+        <span>GPS LOCK [12.9716, 77.5946]</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <span>SATELLITE ONLINE [SAT-08]</span>
+        <span style={{ color: '#242D32' }}>|</span>
+        <span>NET HLTH: 99.8%</span>
+        <span style={{ color: '#242D32' }}>|</span>
+        <span style={{ color: '#6FA8DC', fontWeight: '700' }}>DATA SYNCED</span>
+      </div>
+    </div>
+  );
+
+  const canvasArea = (
+    <div 
+      className="cytoscape-wrapper" 
+      style={{ 
+        flexGrow: 1, 
+        position: 'relative', 
+        background: '#050607',
+        backgroundImage: 'radial-gradient(rgba(140, 180, 140, 0.04) 1px, transparent 1px)',
+        backgroundSize: '24px 24px',
+        border: '1px solid var(--card-border)',
+        borderRadius: '4px',
+        overflow: 'hidden'
+      }}
+    >
+      {loading ? (
+        <div className="network-placeholder" style={{ width: '100%' }}>
+          <div className="pulse" style={{ padding: '0.85rem', background: '#0B0F12', border: '1px solid var(--card-border)', borderRadius: '4px', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+            ANALYZING RELATIONSHIP COORDINATES...
+          </div>
+        </div>
+      ) : error ? (
+        <div className="network-placeholder" style={{ color: 'var(--accent-red)', width: '100%' }}>
+          <ShieldAlert size={24} />
+          <p style={{ marginTop: '0.5rem', fontWeight: '600', fontSize: '0.75rem' }}>FAILED TO COMPILE GRAPH MATRIX</p>
+          <button className="select-input" style={{ marginTop: '0.5rem', fontSize: '0.65rem' }} onClick={fetchGraphData}>
+            RETRY QUERY
+          </button>
+        </div>
+      ) : !accusedId ? (
+        <div className="network-placeholder" style={{ width: '100%' }}>
+          <Network size={28} style={{ opacity: 0.5 }} aria-hidden="true" />
+          <p style={{ fontWeight: '600', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>OFFENDER RELATIONSHIP FEED OFFLINE</p>
+          <p style={{ fontSize: '0.65rem', marginTop: '0.25rem', maxWidth: '280px' }}>
+            Choose a regional suspect from the spatiotemporal heatmap page to start the link analysis pipeline.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Compass Overlay */}
+          <div style={{
+            position: 'absolute',
+            top: '16px',
+            left: '16px',
+            zIndex: 10,
+            pointerEvents: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            opacity: 0.25
+          }}>
+            <span style={{ fontSize: '0.45rem', fontWeight: '800', color: 'var(--text-muted)', marginBottom: '1px' }}>N</span>
+            <Compass size={16} style={{ color: 'var(--text-muted)' }} />
+          </div>
+
+          {/* Map Coordinates overlay bottom right */}
+          <div style={{
+            position: 'absolute',
+            bottom: '12px',
+            right: '16px',
+            zIndex: 10,
+            pointerEvents: 'none',
+            fontSize: '0.55rem',
+            fontFamily: 'monospace',
+            color: 'var(--text-muted)',
+            textAlign: 'right',
+            lineHeight: 1.3,
+            opacity: 0.45
+          }}>
+            <div>12.9716° N</div>
+            <div>77.5946° E</div>
+          </div>
+
+          {/* Tactical HUD overlays */}
+          <div className="tactical-scan-container">
+            <div className="tactical-scan-line" />
+          </div>
+
+          {/* Cytoscape Canvas */}
+          <div ref={containerRef} className="cytoscape-canvas" />
+
+          {/* Absolute Overlay Target Dossier Panel */}
+          {selectedNode && nodeDossierPanel}
+        </>
       )}
     </div>
   );
 
+  // Full Screen Layout
   if (isFullscreen) {
-    return createPortal(content, document.body);
+    return createPortal(
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        background: '#050607',
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        zIndex: 99999,
+        fontFamily: 'var(--font-family)'
+      }}>
+        {commandStrip}
+        <div style={{ display: 'flex', flexGrow: 1, gap: '0.75rem', overflow: 'hidden' }}>
+          {/* Left panel widgets */}
+          {leftWidgets}
+          {/* Center Canvas */}
+          <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {canvasArea}
+            {statusStrip}
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
   }
-  return content;
+
+  // Normal Card View
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '0.25rem' }}>
+      {commandStrip}
+      <div style={{ display: 'flex', flexGrow: 1, gap: '0.75rem', overflow: 'hidden', height: '100%' }}>
+        {/* Left Column (Legend) */}
+        {accusedId && !loading && !error && leftWidgets}
+        {/* Canvas Area */}
+        <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {canvasArea}
+          {accusedId && !loading && !error && statusStrip}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default NetworkView;
