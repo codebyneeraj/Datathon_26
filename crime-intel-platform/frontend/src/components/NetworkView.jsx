@@ -47,6 +47,7 @@ const locationSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`
 const NetworkView = ({ accusedId, accusedName }) => {
   const containerRef = useRef(null);
   const cyRef = useRef(null);
+  const nodePositionsRef = useRef({});
   const [elements, setElements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -106,6 +107,7 @@ const NetworkView = ({ accusedId, accusedName }) => {
     setLoading(true);
     setError(null);
     setSelectedNode(null);
+    nodePositionsRef.current = {};
 
     api.getNetworkGraph(accusedId)
       .then((data) => {
@@ -151,6 +153,29 @@ const NetworkView = ({ accusedId, accusedName }) => {
       return el;
     });
 
+    const hasCachedPositions = nodePositionsRef.current && Object.keys(nodePositionsRef.current).length > 0;
+
+    const layoutOptions = hasCachedPositions ? {
+      name: 'preset',
+      positions: (node) => nodePositionsRef.current[node.id()] || { x: 0, y: 0 },
+      fit: true,
+      padding: 30
+    } : {
+      name: 'cose',
+      idealEdgeLength: 100,
+      nodeOverlap: 20,
+      refresh: 0,
+      animate: false,
+      fit: true,
+      padding: 30,
+      componentSpacing: 100,
+      nodeRepulsion: 400000,
+      edgeElasticity: 100,
+      nestingFactor: 5,
+      gravity: 80,
+      numIter: 200
+    };
+
     cyRef.current = cytoscape({
       container: containerRef.current,
       elements: formattedElements,
@@ -174,7 +199,7 @@ const NetworkView = ({ accusedId, accusedName }) => {
             'text-outline-opacity': 1,
             'font-weight': '600',
             'transition-property': 'opacity',
-            'transition-duration': '0.15s'
+            'transition-duration': '0.1s'
           }
         },
         {
@@ -210,7 +235,7 @@ const NetworkView = ({ accusedId, accusedName }) => {
             'curve-style': 'bezier',
             'opacity': 0.8,
             'transition-property': 'line-color, width, opacity',
-            'transition-duration': '0.15s'
+            'transition-duration': '0.1s'
           }
         },
         {
@@ -280,19 +305,16 @@ const NetworkView = ({ accusedId, accusedName }) => {
           }
         }
       ],
-      layout: {
-        name: 'cose',
-        idealEdgeLength: 120,
-        nodeOverlap: 40,
-        refresh: 20,
-        fit: true,
-        padding: 30,
-        componentSpacing: 120,
-        nodeRepulsion: 1500000,
-        edgeElasticity: 100,
-        nestingFactor: 5,
-        gravity: 80,
-        numIter: 1000
+      layout: layoutOptions
+    });
+
+    cyRef.current.on('layoutstop', () => {
+      if (cyRef.current) {
+        const posMap = {};
+        cyRef.current.nodes().forEach(node => {
+          posMap[node.id()] = { ...node.position() };
+        });
+        nodePositionsRef.current = posMap;
       }
     });
 
@@ -332,17 +354,20 @@ const NetworkView = ({ accusedId, accusedName }) => {
     };
   }, [elements, isFullscreen]);
 
+  useEffect(() => {
+    if (cyRef.current) {
+      const timer = setTimeout(() => {
+        if (cyRef.current) {
+          cyRef.current.resize();
+          cyRef.current.fit(undefined, 30);
+        }
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [isFullscreen]);
+
   const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-    const resizeCy = () => {
-      if (cyRef.current) {
-        cyRef.current.resize();
-        cyRef.current.fit();
-      }
-    };
-    setTimeout(resizeCy, 50);
-    setTimeout(resizeCy, 150);
-    setTimeout(resizeCy, 300);
+    setIsFullscreen((prev) => !prev);
   };
 
   const handleExportPng = () => {

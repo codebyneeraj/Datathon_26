@@ -6,7 +6,7 @@ backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "backend"
 sys.path.append(backend_path)
 
 from app.database import SessionLocal
-from app.models import Incident, Accused, Victim
+from app.models import CaseMaster, Accused, Victim, Unit, District
 from app.analytics.clustering import detect_hotspots
 from app.analytics.network_build import build_network_graph
 
@@ -19,7 +19,7 @@ def run_tests():
     
     # Test 1: Database Seed Integrity
     print("[Test 1/5] Checking database seed integrity...")
-    incidents_count = db.query(Incident).count()
+    incidents_count = db.query(CaseMaster).count()
     accused_count = db.query(Accused).count()
     victims_count = db.query(Victim).count()
     
@@ -33,7 +33,7 @@ def run_tests():
     
     # Test 2: DBSCAN Clustering Core
     print("\n[Test 2/5] Verifying DBSCAN hotspot clustering on Bengaluru...")
-    bengaluru_incidents = db.query(Incident).filter(Incident.district == "Bengaluru").all()
+    bengaluru_incidents = db.query(CaseMaster).join(Unit).join(District).filter(District.DistrictName == "Bengaluru").all()
     print(f"  Found {len(bengaluru_incidents)} incidents in Bengaluru.")
     
     # Run clustering
@@ -60,7 +60,9 @@ def run_tests():
     assert len(edges) > 0, "Network graph has 0 edges!"
     
     # Find Ramesh Kumar's node and check centrality
-    ramesh_node = next((n for n in nodes if n["data"]["id"] == "accused_1"), None)
+    ramesh_db = db.query(Accused).filter(Accused.AccusedMasterID == 1).first()
+    ramesh_node_id = f"accused_{ramesh_db.PersonID}"
+    ramesh_node = next((n for n in nodes if n["data"]["id"] == ramesh_node_id), None)
     assert ramesh_node is not None, "Ramesh Kumar node not found in network!"
     print(f"  Ramesh Kumar degree centrality: {ramesh_node['data']['degree_centrality']}")
     print(f"  Ramesh Kumar risk score: {ramesh_node['data']['risk_score']}/100")
