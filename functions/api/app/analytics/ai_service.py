@@ -218,7 +218,44 @@ class AIService:
         data = response.json()
         return self._sanitize_output(data.get("response"))
 
+    def _call_gemini_api(self, prompt: str, system_instruction: Optional[str] = None) -> Optional[str]:
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            return None
+        
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+            
+            full_prompt = f"System Instruction:\n{system_instruction}\n\nUser Request:\n{prompt}" if system_instruction else prompt
+            payload = {
+                "contents": [{"parts": [{"text": full_prompt}]}],
+                "generationConfig": {
+                    "temperature": self.temperature,
+                    "maxOutputTokens": self.num_predict
+                }
+            }
+            
+            with httpx.Client(timeout=15.0) as client:
+                res = client.post(url, json=payload)
+                if res.status_code == 200:
+                    data = res.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        if parts:
+                            self._last_live_model = "gemini-1.5-flash"
+                            return self._sanitize_output(parts[0].get("text"))
+        except Exception as e:
+            logger.warning("Gemini Cloud API call failed: %s", e)
+        return None
+
     def _call_llm(self, prompt: str, system_instruction: Optional[str] = None) -> Optional[str]:
+        # 1. Try Gemini Cloud API first if API key is configured
+        gemini_res = self._call_gemini_api(prompt, system_instruction)
+        if gemini_res:
+            return gemini_res
+
+        # 2. Fall back to Ollama local runtime
         status = self.get_status()
         if not status["healthy"]:
             logger.warning("Ollama health check failed: %s", status["message"])
