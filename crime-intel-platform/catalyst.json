@@ -1,0 +1,7 @@
+{
+  "client": {
+    "source": "frontend",
+    "build": "npm run build",
+    "document": "dist"
+  }
+}

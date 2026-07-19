@@ -1,0 +1,7 @@
+{
+  "client": {
+    "source": "crime-intel-platform/frontend",
+    "build": "npm run build",
+    "document": "dist"
+  }
+}
