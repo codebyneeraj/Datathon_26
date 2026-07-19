@@ -1,7 +1,8 @@
 /**
  * API base URL resolved from environment variables or defaulting to localhost:8000
  */
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://project-rainfall-60078587276.development.catalystserverless.in/server/api';
+const RAW_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://project-rainfall-60078587276.development.catalystserverless.in/server/api';
+const BASE_URL = RAW_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
 
 /**
  * Custom API Error representing backend HTTP failures
