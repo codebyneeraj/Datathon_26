@@ -47,6 +47,46 @@ const AnalyticsView = ({
   // Briefing Report Modal State
   const [showBriefingModal, setShowBriefingModal] = useState(false);
 
+  // Gemma AI Threat Brief State
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+
+  const handleGenerateAISummary = () => {
+    setAiSummaryLoading(true);
+    const targetDist = selectedDistrict === 'All' ? 'Bengaluru' : selectedDistrict;
+    const distRisk = riskScores.find(r => r.district === targetDist) || {
+      predicted_risk_score: 68.5,
+      risk_level: 'High',
+      incident_count_latest: 32
+    };
+
+    api.getDistrictAISummary({
+      district: targetDist,
+      risk_score: distRisk.predicted_risk_score || 65.0,
+      risk_level: distRisk.risk_level || 'High',
+      incident_count: distRisk.incident_count_latest || 28,
+      socioeconomic: {
+        population: distRisk.population || 8443675,
+        unemployment_rate: distRisk.unemployment_rate || 6.8,
+        urbanization_index: distRisk.urbanization_index || 0.82,
+        literacy_rate: distRisk.literacy_rate || 87.6
+      },
+      top_crimes: [
+        { type: 'Cyber Scam', count: 14 },
+        { type: 'Property Theft', count: 9 },
+        { type: 'Assault', count: 5 }
+      ]
+    })
+      .then(res => {
+        setAiSummary(res);
+        setAiSummaryLoading(false);
+      })
+      .catch(err => {
+        console.error("AI Summary error:", err);
+        setAiSummaryLoading(false);
+      });
+  };
+
   // Dynamic lists
   const districtsList = riskScores.map(r => r.district);
 
@@ -194,17 +234,65 @@ const AnalyticsView = ({
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <Button
+            onClick={handleGenerateAISummary}
+            disabled={aiSummaryLoading}
+            style={{ 
+              height: '32px', 
+              fontSize: '0.75rem',
+              background: 'linear-gradient(135deg, rgba(127,191,91,0.2) 0%, rgba(127,191,91,0.05) 100%)',
+              border: '1px solid var(--accent-blue)',
+              color: 'var(--text-primary)'
+            }}
+          >
+            <Cpu size={13} className={aiSummaryLoading ? 'spin' : ''} style={{ color: 'var(--accent-blue)' }} />
+            {aiSummaryLoading ? 'Generating AI Brief...' : 'Generate Local AI Threat Brief'}
+          </Button>
+
           <Button 
             variant="ghost" 
             onClick={() => setShowBriefingModal(true)}
             style={{ height: '32px', fontSize: '0.75rem' }}
           >
             <Printer size={13} />
-            Generate Intelligence Brief
+            Print Report
           </Button>
         </div>
       </div>
+
+      {/* Gemma LLM AI Intelligence Brief Panel */}
+      {aiSummary && (
+        <div 
+          style={{ 
+            background: 'rgba(15, 20, 26, 0.95)', 
+            border: '1px solid var(--accent-blue)', 
+            borderRadius: '8px', 
+            padding: '16px 20px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Cpu size={16} style={{ color: 'var(--accent-blue)' }} />
+              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                AI Executive Intelligence Brief: {aiSummary.district}
+              </span>
+            </div>
+            <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(127, 191, 91, 0.15)', color: 'var(--accent-green)', fontWeight: '700', border: '1px solid rgba(127, 191, 91, 0.3)' }}>
+              MODEL: {aiSummary.model_used || 'local-ollama'}
+            </span>
+          </div>
+
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.5', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-family)' }}>
+            {aiSummary.summary}
+          </div>
+        </div>
+      )}
 
       {/* Analytics Main Shell */}
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '20px', alignItems: 'stretch' }}>

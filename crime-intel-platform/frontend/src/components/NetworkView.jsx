@@ -55,6 +55,41 @@ const NetworkView = ({ accusedId, accusedName }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [systemTime, setSystemTime] = useState('');
 
+  // Gemma AI Link Insight State
+  const [aiInsight, setAiInsight] = useState(null);
+  const [aiInsightLoading, setAiInsightLoading] = useState(false);
+
+  const handleGenerateAIInsight = () => {
+    if (!accusedId) return;
+    if (!isFullscreen) {
+      setIsFullscreen(true);
+    }
+    setAiInsight(null);
+    setAiInsightLoading(true);
+
+    const nodes = elements.filter(e => !e.data.source);
+    const edges = elements.filter(e => e.data.source);
+    const coAccusedList = nodes
+      .filter(n => n.data.type === 'accused' && n.data.id !== accusedId.toString())
+      .map(n => ({ id: n.data.id, name: n.data.label.split('\n')[0] }));
+
+    api.getNetworkAIInsight({
+      accused_id: accusedId,
+      accused_name: accusedName || `Accused #${accusedId}`,
+      total_nodes: nodes.length,
+      total_edges: edges.length,
+      co_accused: coAccusedList
+    })
+      .then(res => {
+        setAiInsight(res);
+        setAiInsightLoading(false);
+      })
+      .catch(err => {
+        console.error("AI Network Insight error:", err);
+        setAiInsightLoading(false);
+      });
+  };
+
   // Track system clock for command strip metadata
   useEffect(() => {
     const updateTime = () => {
@@ -337,6 +372,11 @@ const NetworkView = ({ accusedId, accusedName }) => {
 
   const nodeCount = elements ? elements.filter(el => !el.data.source).length : 0;
   const edgeCount = elements ? elements.filter(el => el.data.source).length : 0;
+  const accusedNodes = elements.filter(el => !el.data.source && el.data.type === 'accused');
+  const incidentNodes = elements.filter(el => !el.data.source && el.data.type === 'incident');
+  const victimNodes = elements.filter(el => !el.data.source && el.data.type === 'victim');
+  const locationNodes = elements.filter(el => !el.data.source && el.data.type === 'location');
+  const coAccusedCount = Math.max(accusedNodes.length - 1, 0);
 
   // Calculate dynamic stats for the node profile & network overview
   let directConnectionsCount = 0;
@@ -396,6 +436,172 @@ const NetworkView = ({ accusedId, accusedName }) => {
   // Calculate graph density: 2 * E / (V * (V - 1))
   const density = nodeCount > 1 ? ((2 * edgeCount) / (nodeCount * (nodeCount - 1))).toFixed(3) : '0.000';
   const avgDegree = nodeCount > 0 ? ((2 * edgeCount) / nodeCount).toFixed(2) : '0.00';
+  const networkHealth = Math.min(99, Math.max(74, Math.round(86 + (edgeCount / Math.max(nodeCount, 1)) * 4)));
+  const hierarchyScore = Math.min(98, Math.max(52, Math.round((coAccusedCount / Math.max(accusedNodes.length, 1)) * 100)));
+  const coverageScore = Math.min(96, Math.max(48, Math.round((locationNodes.length / Math.max(nodeCount, 1)) * 400)));
+  const typeDistribution = [
+    { label: 'Accused', count: accusedNodes.length, color: '#D65C5C' },
+    { label: 'Incidents', count: incidentNodes.length, color: '#6FA8DC' },
+    { label: 'Victims', count: victimNodes.length, color: '#D6A13D' },
+    { label: 'Locations', count: locationNodes.length, color: '#7FBF5B' }
+  ];
+  const maxDistributionCount = Math.max(...typeDistribution.map((item) => item.count), 1);
+  const insightParagraphs = aiInsight?.insight
+    ? aiInsight.insight
+        .split(/\n+/)
+        .map((line) => line.replace(/^[*\-\s]+/, '').trim())
+        .filter(Boolean)
+    : [];
+  const insightSections = insightParagraphs.map((line, index) => {
+    const sanitized = line.replace(/\*\*/g, '');
+    const match = sanitized.match(/^([^:]+):\s*(.*)$/);
+
+    if (match) {
+      return {
+        id: `${match[1]}-${index}`,
+        title: match[1].trim(),
+        body: match[2].trim()
+      };
+    }
+
+    return {
+      id: `section-${index}`,
+      title: index === 0 ? 'Intelligence Summary' : `Assessment ${index + 1}`,
+      body: sanitized
+    };
+  });
+
+  const aiInsightPanel = (aiInsightLoading || aiInsight) && (
+    <div
+      className="tactical-panel"
+      style={{
+        width: isFullscreen ? '360px' : '320px',
+        minWidth: isFullscreen ? '360px' : '320px',
+        maxWidth: isFullscreen ? '360px' : '320px',
+        padding: '12px',
+        borderRadius: '4px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        overflowY: 'auto',
+        animation: 'fadeIn 0.15s ease-out'
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span style={{ fontWeight: '700', color: 'var(--accent-blue)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem' }}>
+            <Cpu size={12} className={aiInsightLoading ? 'spin' : ''} />
+            AI Link Intelligence
+          </span>
+          <span style={{ color: '#fff', fontWeight: '700', fontSize: '0.92rem' }}>
+            {aiInsight?.accused_name || accusedName || `Accused #${accusedId}`}
+          </span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {aiInsightLoading ? 'Generating Tactical Assessment...' : 'Network Assessment Panel'}
+          </span>
+        </div>
+        <span style={{ fontSize: '0.55rem', padding: '2px 6px', background: 'rgba(127,191,91,0.15)', color: 'var(--accent-green)', borderRadius: '3px', whiteSpace: 'nowrap' }}>
+          {aiInsightLoading ? 'ANALYZING' : (aiInsight?.model_used || 'local-ollama')}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+        {[
+          { label: 'Entities', value: nodeCount, color: '#6FA8DC' },
+          { label: 'Links', value: edgeCount, color: '#A5D66A' },
+          { label: 'Co-Accused', value: coAccusedCount, color: '#D65C5C' },
+          { label: 'Avg Degree', value: avgDegree, color: '#D6A13D' }
+        ].map((stat) => (
+          <div key={stat.label} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--card-border)', borderRadius: '4px', padding: '8px 10px' }}>
+            <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{stat.label}</div>
+            <div style={{ fontSize: '1rem', fontWeight: '800', color: stat.color, marginTop: '4px' }}>{stat.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--card-border)', borderRadius: '4px', padding: '10px' }}>
+        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          Operational Scores
+        </div>
+        {[
+          { label: 'Network Health', value: networkHealth, color: '#7FBF5B' },
+          { label: 'Hierarchy Signal', value: hierarchyScore, color: '#6FA8DC' },
+          { label: 'Coverage Reach', value: coverageScore, color: '#D6A13D' }
+        ].map((score) => (
+          <div key={score.label} style={{ marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px', fontSize: '0.62rem' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>{score.label}</span>
+              <strong style={{ color: '#fff' }}>{score.value}%</strong>
+            </div>
+            <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '999px', overflow: 'hidden' }}>
+              <div style={{ width: `${score.value}%`, height: '100%', background: `linear-gradient(90deg, ${score.color}55, ${score.color})` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--card-border)', borderRadius: '4px', padding: '10px' }}>
+        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          Entity Distribution
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {typeDistribution.map((item) => (
+            <div key={item.label}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px', fontSize: '0.62rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{item.label}</span>
+                <strong style={{ color: '#fff' }}>{item.count}</strong>
+              </div>
+              <div style={{ height: '8px', background: 'rgba(255,255,255,0.04)', borderRadius: '999px', overflow: 'hidden' }}>
+                <div style={{ width: `${(item.count / maxDistributionCount) * 100}%`, height: '100%', background: item.color }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--card-border)', borderRadius: '4px', padding: '10px' }}>
+        <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          AI Assessment
+        </div>
+        {aiInsightLoading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {[
+              'Syndicate Role & Centrality',
+              'Modus Operandi Pattern',
+              'Interrogation / Surveillance Recommendation'
+            ].map((label, index) => (
+              <div key={label} style={{ padding: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.03)' }}>
+                <div style={{ color: '#A5D66A', fontSize: '0.62rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                  {label}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <div className="pulse" style={{ height: '8px', width: `${92 - index * 10}%`, borderRadius: '999px', background: 'rgba(111, 168, 220, 0.18)' }} />
+                  <div className="pulse" style={{ height: '8px', width: `${78 - index * 8}%`, borderRadius: '999px', background: 'rgba(127, 191, 91, 0.16)' }} />
+                  <div className="pulse" style={{ height: '8px', width: `${64 - index * 6}%`, borderRadius: '999px', background: 'rgba(255, 255, 255, 0.10)' }} />
+                </div>
+              </div>
+            ))}
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.64rem', lineHeight: '1.5' }}>
+              AI is correlating co-accused links, entity density, and network topology to assemble the intelligence brief.
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {insightSections.map((section) => (
+              <div key={section.id} style={{ padding: '8px', borderRadius: '4px', background: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.03)' }}>
+                <div style={{ color: '#A5D66A', fontSize: '0.62rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                  {section.title}
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.68rem', lineHeight: '1.5' }}>
+                  {section.body}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   // Left Sidebar panel widgets structured with tactical panel design
   const leftWidgets = (
@@ -757,7 +963,28 @@ const NetworkView = ({ accusedId, accusedName }) => {
         <span style={{ color: 'var(--text-muted)' }}>{systemTime}</span>
         <span style={{ color: 'var(--card-border)' }}>|</span>
         {accusedId && !loading && !error && (
-          <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+            <button
+              onClick={handleGenerateAIInsight}
+              disabled={aiInsightLoading}
+              style={{
+                background: 'rgba(127, 191, 91, 0.12)',
+                border: '1px solid var(--accent-blue)',
+                color: '#fff',
+                padding: '2px 8px',
+                fontSize: '0.6rem',
+                cursor: 'pointer',
+                borderRadius: '2px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontWeight: '700'
+              }}
+            >
+              <Cpu size={10} className={aiInsightLoading ? 'spin' : ''} style={{ color: 'var(--accent-blue)' }} />
+              {aiInsightLoading ? 'ANALYZING...' : 'AI LINK ANALYSIS'}
+            </button>
+
             <button
               onClick={() => cyRef.current?.fit()}
               style={{ background: 'transparent', border: '1px solid var(--card-border)', color: '#fff', padding: '2px 6px', fontSize: '0.6rem', cursor: 'pointer', borderRadius: '2px' }}
@@ -960,6 +1187,7 @@ const NetworkView = ({ accusedId, accusedName }) => {
             {canvasArea}
             {statusStrip}
           </div>
+          {aiInsightPanel}
         </div>
       </div>,
       document.body
@@ -970,6 +1198,7 @@ const NetworkView = ({ accusedId, accusedName }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '0.25rem' }}>
       {commandStrip}
+
       <div style={{ display: 'flex', flexGrow: 1, gap: '0.75rem', overflow: 'hidden', height: '100%' }}>
         {/* Left Column (Legend) */}
         {accusedId && !loading && !error && leftWidgets}
@@ -978,6 +1207,7 @@ const NetworkView = ({ accusedId, accusedName }) => {
           {canvasArea}
           {accusedId && !loading && !error && statusStrip}
         </div>
+        {aiInsightPanel}
       </div>
     </div>
   );

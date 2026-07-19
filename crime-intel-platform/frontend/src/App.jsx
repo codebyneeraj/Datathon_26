@@ -8,6 +8,7 @@ import ClearanceView from './components/ClearanceView';
 import SettingsView from './components/SettingsView';
 import RoleSwitcher from './components/RoleSwitcher';
 import Breadcrumbs from './components/Breadcrumbs';
+import AIAssistantWidget from './components/AIAssistantWidget';
 import Card from './components/ui/Card';
 import StatCard from './components/ui/StatCard';
 import Badge from './components/ui/Badge';
@@ -499,6 +500,9 @@ function App() {
           </>
         )}
       </div>
+
+      {/* Tactical AI Command Assistant Floating Drawer */}
+      <AIAssistantWidget />
     </div>
   );
 }

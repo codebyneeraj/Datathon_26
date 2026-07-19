@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import hotspots, network, correlations, risk
+from .routers import hotspots, network, correlations, risk, ai
 
 app = FastAPI(
     title="Crime Intelligence & Analytical Platform API",
-    description="Backend API for clustering, link analysis, and risk scoring.",
+    description="Backend API for clustering, link analysis, risk scoring, and Gemma LLM AI summaries.",
     version="1.0.0"
 )
 
@@ -22,6 +22,7 @@ app.include_router(hotspots.router)
 app.include_router(network.router)
 app.include_router(correlations.router)
 app.include_router(risk.router)
+app.include_router(ai.router)
 
 @app.get("/")
 def read_root():

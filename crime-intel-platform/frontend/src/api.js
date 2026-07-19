@@ -157,5 +157,35 @@ export const api = {
    */
   getIncidentAccused: (incidentId) => {
     return request(`/api/risk/incidents/${incidentId}/accused`);
+  },
+
+  /**
+   * Generates an AI threat summary for a district using the configured backend model
+   */
+  getDistrictAISummary: (districtData) => {
+    return request('/api/ai/district-summary', {
+      method: 'POST',
+      body: JSON.stringify(districtData)
+    });
+  },
+
+  /**
+   * Generates AI link network analysis insight using the configured backend model
+   */
+  getNetworkAIInsight: (networkData) => {
+    return request('/api/ai/network-insight', {
+      method: 'POST',
+      body: JSON.stringify(networkData)
+    });
+  },
+
+  /**
+   * Sends natural language query to Tactical AI Assistant
+   */
+  askAIAssistant: (query, context = null) => {
+    return request('/api/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({ query, context })
+    });
   }
 };
