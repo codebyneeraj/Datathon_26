@@ -1,0 +1,6 @@
+{
+  "name": "api",
+  "type": "advancedio",
+  "stack": "python3.11",
+  "entry": "app/main.py"
+}
