@@ -8,6 +8,7 @@ from ..analytics.clustering import detect_hotspots
 router = APIRouter(prefix="/api/hotspots", tags=["hotspots"])
 
 @router.get("")
+@router.get("/")
 def get_hotspots_api(
     district: Optional[str] = Query(None, description="Filter by district"),
     start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
@@ -18,7 +19,7 @@ def get_hotspots_api(
 ):
     query = db.query(CaseMaster)
 
-    if district:
+    if district and district != 'All':
         query = query.join(Unit).join(District).filter(District.DistrictName == district)
         
     if start_date:
@@ -28,8 +29,6 @@ def get_hotspots_api(
         query = query.filter(CaseMaster.CrimeRegisteredDate <= end_date)
 
     incidents = query.all()
-    
-    # DBSCAN hyperparameters passed dynamically from settings
     features = detect_hotspots(incidents, eps=eps, min_samples=min_samples)
     
     return {

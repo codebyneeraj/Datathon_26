@@ -123,6 +123,7 @@ const AIAssistantWidget = () => {
           style={{
             width: '380px',
             height: '520px',
+            maxHeight: 'calc(100vh - 80px)',
             background: 'var(--card-bg)',
             border: '1px solid var(--card-border-hover)',
             borderRadius: '12px',

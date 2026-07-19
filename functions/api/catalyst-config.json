@@ -1,6 +1,11 @@
 {
-  "name": "api",
-  "type": "advancedio",
-  "stack": "python3.11",
-  "entry": "main.py"
+	"deployment": {
+		"name": "api",
+		"stack": "python_3_11",
+		"type": "advancedio",
+		"env_variables": {}
+	},
+	"execution": {
+		"main": "main.py"
+	}
 }

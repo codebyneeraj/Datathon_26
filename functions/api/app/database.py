@@ -1,20 +1,38 @@
 import os
+import shutil
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Resolve absolute path for SQLite to prevent multiple database files
-db_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-db_path = os.path.join(db_dir, "crime_db.db")
+# Locate crime_db.db in source folder
+base_dir = os.path.dirname(os.path.abspath(__file__))
+db_source = os.path.abspath(os.path.join(base_dir, "..", "crime_db.db"))
+
+if not os.path.exists(db_source):
+    db_source = os.path.abspath(os.path.join(base_dir, "crime_db.db"))
+
+# Handle serverless read-only filesystem by copying database to /tmp if available
+tmp_db = "/tmp/crime_db.db"
+if os.path.exists("/tmp") and os.access("/tmp", os.W_OK):
+    if not os.path.exists(tmp_db) and os.path.exists(db_source):
+        try:
+            shutil.copy2(db_source, tmp_db)
+        except Exception:
+            pass
+    if os.path.exists(tmp_db):
+        db_path = tmp_db
+    else:
+        db_path = db_source
+else:
+    db_path = db_source
+
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{db_path}")
 
-# For SQLite, we need to allow multiple threads and enable foreign keys
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
-# Enable foreign keys for SQLite
 if DATABASE_URL.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
@@ -23,7 +41,6 @@ if DATABASE_URL.startswith("sqlite"):
         cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
 
 def get_db():

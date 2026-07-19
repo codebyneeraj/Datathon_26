@@ -1,67 +1,99 @@
-import numpy as np
-import pandas as pd
-from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import StandardScaler
+import math
+from collections import defaultdict
 
 def detect_hotspots(incidents, eps=0.3, min_samples=4):
     """
-    Perform DBSCAN clustering on incident lat/long coordinates.
-    Standardizes the coordinates first as requested.
-    Returns a list of cluster details.
+    Perform pure-Python DBSCAN clustering on incident lat/long coordinates.
+    Returns a list of cluster details for Leaflet map rendering.
     """
     if len(incidents) < min_samples:
         return []
 
-    # Convert incidents to DataFrame
-    df = pd.DataFrame([{
-        "id": inc.CaseMasterID,
-        "lat": inc.latitude,
-        "long": inc.longitude,
-        "crime_type": inc.minor_head_rel.CrimeHeadName if inc.minor_head_rel else 'Unknown'
-    } for inc in incidents])
+    points = []
+    for inc in incidents:
+        c_head = inc.minor_head_rel.CrimeHeadName if (hasattr(inc, 'minor_head_rel') and inc.minor_head_rel) else 'Unknown'
+        points.append({
+            'id': getattr(inc, 'CaseMasterID', 0),
+            'lat': float(inc.latitude),
+            'long': float(inc.longitude),
+            'crime_type': c_head
+        })
 
-    coords = df[["lat", "long"]].values
+    if not points:
+        return []
 
-    # Standardize features
-    scaler = StandardScaler()
-    coords_scaled = scaler.fit_transform(coords)
+    lats = [p['lat'] for p in points]
+    lons = [p['long'] for p in points]
+    mean_lat = sum(lats) / len(lats)
+    mean_lon = sum(lons) / len(lons)
+    
+    var_lat = sum((x - mean_lat) ** 2 for x in lats) / len(lats)
+    var_lon = sum((x - mean_lon) ** 2 for x in lons) / len(lons)
+    
+    std_lat = math.sqrt(var_lat) if var_lat > 0 else 1.0
+    std_lon = math.sqrt(var_lon) if var_lon > 0 else 1.0
 
-    # Run DBSCAN
-    db = DBSCAN(eps=eps, min_samples=min_samples).fit(coords_scaled)
-    labels = db.labels_
+    def dist(p1, p2):
+        dx = (p1['lat'] - p2['lat']) / std_lat
+        dy = (p1['long'] - p2['long']) / std_lon
+        return math.sqrt(dx*dx + dy*dy)
 
-    df["cluster"] = labels
+    n = len(points)
+    labels = [-1] * n
+    cluster_id = 0
+
+    for i in range(n):
+        if labels[i] != -1:
+            continue
+        neighbors = [j for j in range(n) if dist(points[i], points[j]) <= eps]
+        if len(neighbors) < min_samples:
+            labels[i] = -1
+        else:
+            cluster_id += 1
+            labels[i] = cluster_id
+            seeds = set(neighbors) - {i}
+            while seeds:
+                curr = seeds.pop()
+                if labels[curr] == -1:
+                    labels[curr] = cluster_id
+                if labels[curr] != -1 and labels[curr] != cluster_id:
+                    continue
+                labels[curr] = cluster_id
+                curr_neighbors = [j for j in range(n) if dist(points[curr], points[j]) <= eps]
+                if len(curr_neighbors) >= min_samples:
+                    seeds.update([j for j in curr_neighbors if labels[j] <= 0])
+
+    clusters_dict = defaultdict(list)
+    for idx, cid in enumerate(labels):
+        if cid > 0:
+            clusters_dict[cid].append(points[idx])
 
     clusters_geojson = []
-    
-    # Process each cluster (excluding noise label -1)
-    unique_labels = set(labels) - {-1}
-    
-    for cluster_id in unique_labels:
-        cluster_data = df[df["cluster"] == cluster_id]
-        
-        # Calculate cluster centroid
-        centroid_lat = float(cluster_data["lat"].mean())
-        centroid_lon = float(cluster_data["long"].mean())
-        
-        # Get count and dominant crime types
-        incident_count = len(cluster_data)
-        crime_counts = cluster_data["crime_type"].value_counts().to_dict()
-        
-        # Return coordinates and metadata for Leaflet
+    for cid, pts in clusters_dict.items():
+        c_lats = [p['lat'] for p in pts]
+        c_lons = [p['long'] for p in pts]
+        cent_lat = sum(c_lats) / len(pts)
+        cent_lon = sum(c_lons) / len(pts)
+
+        crime_counts = defaultdict(int)
+        for p in pts:
+            crime_counts[p['crime_type']] += 1
+
+        max_dist = max(math.sqrt((p['lat'] - cent_lat)**2 + (p['long'] - cent_lon)**2) for p in pts) if pts else 0.01
+
         clusters_geojson.append({
             "type": "Feature",
             "properties": {
-                "cluster_id": int(cluster_id),
-                "incident_count": incident_count,
-                "crime_types": crime_counts,
+                "cluster_id": cid,
+                "incident_count": len(pts),
+                "crime_types": dict(crime_counts),
                 "primary_crime": max(crime_counts, key=crime_counts.get),
-                "radius": float(np.max(np.linalg.norm(cluster_data[["lat", "long"]].values - [centroid_lat, centroid_lon], axis=1)) * 111000) # radius in meters (roughly)
+                "radius": float(max_dist * 111000)
             },
             "geometry": {
                 "type": "Point",
-                "coordinates": [centroid_lon, centroid_lat]
+                "coordinates": [cent_lon, cent_lat]
             }
         })
-        
+
     return clusters_geojson

@@ -37,7 +37,7 @@ const Card = ({
         </div>
       )}
 
-      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0, overflow: 'hidden' }}>
         {loading ? (
           <div className="skeleton-container" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', height: '100%', minHeight: '150px' }}>
             <div className="skeleton-line pulse" style={{ height: '24px', width: '60%', background: 'rgba(255,255,255,0.03)', borderRadius: '4px' }}></div>

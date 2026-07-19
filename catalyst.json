@@ -3,6 +3,10 @@
     "source": "functions",
     "targets": [
       "api"
-    ]
+    ],
+    "ignore": []
+  },
+  "client": {
+    "source": "crime-intel-platform/frontend/dist"
   }
 }

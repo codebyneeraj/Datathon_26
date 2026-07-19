@@ -496,13 +496,16 @@ const NetworkView = ({ accusedId, accusedName }) => {
     };
   });
 
-  const aiInsightPanel = (aiInsightLoading || aiInsight) && (
+  const aiInsightPanel = isFullscreen && (aiInsightLoading || aiInsight) && (
     <div
       className="tactical-panel"
       style={{
         width: isFullscreen ? '360px' : '320px',
         minWidth: isFullscreen ? '360px' : '320px',
         maxWidth: isFullscreen ? '360px' : '320px',
+        height: '100%',
+        maxHeight: '100%',
+        boxSizing: 'border-box',
         padding: '12px',
         borderRadius: '4px',
         display: 'flex',
@@ -525,9 +528,29 @@ const NetworkView = ({ accusedId, accusedName }) => {
             {aiInsightLoading ? 'Generating Tactical Assessment...' : 'Network Assessment Panel'}
           </span>
         </div>
-        <span style={{ fontSize: '0.55rem', padding: '2px 6px', background: 'rgba(127,191,91,0.15)', color: 'var(--accent-green)', borderRadius: '3px', whiteSpace: 'nowrap' }}>
-          {aiInsightLoading ? 'ANALYZING' : (aiInsight?.model_used || 'local-ollama')}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '0.55rem', padding: '2px 6px', background: 'rgba(127,191,91,0.15)', color: 'var(--accent-green)', borderRadius: '3px', whiteSpace: 'nowrap' }}>
+            {aiInsightLoading ? 'ANALYZING' : (aiInsight?.model_used || 'local-ollama')}
+          </span>
+          <button
+            onClick={() => {
+              setAiInsight(null);
+              setAiInsightLoading(false);
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              lineHeight: 1,
+              padding: '0 2px'
+            }}
+            title="Close AI Assessment Panel"
+          >
+            &times;
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
@@ -1201,14 +1224,16 @@ const NetworkView = ({ accusedId, accusedName }) => {
         display: 'flex',
         flexDirection: 'column',
         zIndex: 99999,
-        fontFamily: 'var(--font-family)'
+        fontFamily: 'var(--font-family)',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       }}>
         {commandStrip}
-        <div style={{ display: 'flex', flexGrow: 1, gap: '0.75rem', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexGrow: 1, gap: '0.75rem', overflow: 'hidden', minHeight: 0, height: 'calc(100vh - 80px)' }}>
           {/* Left panel widgets */}
           {leftWidgets}
           {/* Center Canvas */}
-          <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
             {canvasArea}
             {statusStrip}
           </div>
@@ -1221,18 +1246,17 @@ const NetworkView = ({ accusedId, accusedName }) => {
 
   // Normal Card View
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '0.25rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '0.25rem', minHeight: 0 }}>
       {commandStrip}
 
-      <div style={{ display: 'flex', flexGrow: 1, gap: '0.75rem', overflow: 'hidden', height: '100%' }}>
+      <div style={{ display: 'flex', flexGrow: 1, gap: '0.75rem', overflow: 'hidden', height: '100%', minHeight: 0, maxHeight: '520px' }}>
         {/* Left Column (Legend) */}
         {accusedId && !loading && !error && leftWidgets}
         {/* Canvas Area */}
-        <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
           {canvasArea}
           {accusedId && !loading && !error && statusStrip}
         </div>
-        {aiInsightPanel}
       </div>
     </div>
   );

@@ -1,13 +1,9 @@
+zcatalyst-sdk==1.4.0
 fastapi
-uvicorn[standard]
 sqlalchemy
-scikit-learn
 networkx
-pandas
 pydantic
 python-dotenv
-faker
 httpx
-flask
 a2wsgi
-zcatalyst_sdk
+flask

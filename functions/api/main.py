@@ -1,76 +1,85 @@
 """
 Catalyst Advanced I/O entry point.
-Wraps the FastAPI application using a2wsgi so Catalyst can invoke it
-via its standard Flask-based handler(request) interface.
+Routes all incoming requests to the FastAPI application via ASGI-to-WSGI bridge.
 """
 import logging
 import json
 import os
 import sys
 
-# Add the function directory to path so app module is importable
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 from flask import Request, make_response
+
+# Ensure the function directory is on the path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Import the FastAPI app
+# Import and initialize FastAPI app
 from app.main import app as fastapi_app
 from app.database import engine
 from app.models import Base
 
-# Ensure tables exist
-Base.metadata.create_all(bind=engine)
-
-# Use a2wsgi to convert ASGI (FastAPI) to WSGI (Flask-compatible)
+# Ensure database tables exist
 try:
-    from a2wsgi import ASGIMiddleware
-    wsgi_app = ASGIMiddleware(fastapi_app)
-except ImportError:
-    wsgi_app = None
-    logger.warning("a2wsgi not installed, falling back to direct Flask routing")
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    logger.warning(f"Table creation warning: {e}")
+
+# Convert FastAPI ASGI app to WSGI using a2wsgi
+from a2wsgi import ASGIMiddleware
+wsgi_app = ASGIMiddleware(fastapi_app)
 
 
 def handler(request: Request):
     """
-    Catalyst Advanced I/O handler function.
-    Routes incoming Catalyst requests to the FastAPI backend.
+    Catalyst Advanced I/O handler.
+    Bridges Flask request -> FastAPI ASGI app via WSGI adapter.
     """
     try:
-        if wsgi_app is not None:
-            # Use the ASGI-to-WSGI adapter to forward requests
-            environ = request.environ.copy()
-            response_data = []
-            response_status = [None]
-            response_headers = [None]
+        environ = request.environ.copy()
 
-            def start_response(status, headers, exc_info=None):
-                response_status[0] = status
-                response_headers[0] = headers
+        # Robust path normalization for Catalyst serverless routing
+        raw_path = environ.get('PATH_INFO', '')
+        clean_path = raw_path
 
-            body = wsgi_app(environ, start_response)
-            response_body = b"".join(body)
+        if clean_path.startswith('/server/api'):
+            clean_path = clean_path[len('/server/api'):]
+        elif clean_path.startswith('/server'):
+            clean_path = clean_path[len('/server'):]
 
-            resp = make_response(response_body)
-            if response_status[0]:
-                status_code = int(response_status[0].split(" ")[0])
-                resp.status_code = status_code
-            if response_headers[0]:
-                for header_name, header_value in response_headers[0]:
-                    resp.headers[header_name] = header_value
-            return resp
-        else:
-            # Fallback: simple JSON response
-            return make_response(
-                json.dumps({
-                    "status": "online",
-                    "message": "Crime Intelligence API - a2wsgi adapter not available"
-                }),
-                200,
-                {"Content-Type": "application/json"}
-            )
+        if not clean_path.startswith('/api') and clean_path != '/' and clean_path != '':
+            clean_path = '/api' + clean_path
+
+        if not clean_path:
+            clean_path = '/'
+
+        environ['SCRIPT_NAME'] = ''
+        environ['PATH_INFO'] = clean_path
+
+        captured_status = [None]
+        captured_headers = [None]
+
+        def start_response(status, headers, exc_info=None):
+            captured_status[0] = status
+            captured_headers[0] = headers
+
+        result = wsgi_app(environ, start_response)
+        body = b"".join(result)
+
+        resp = make_response(body)
+
+        if captured_status[0]:
+            code = int(captured_status[0].split(" ")[0])
+            resp.status_code = code
+
+        if captured_headers[0]:
+            for name, value in captured_headers[0]:
+                if name.lower() != "content-length":
+                    resp.headers[name] = value
+
+        return resp
+
     except Exception as e:
         logger.error(f"Handler error: {e}", exc_info=True)
         return make_response(
