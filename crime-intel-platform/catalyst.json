@@ -1,15 +1,7 @@
 {
-  "client": {
-    "source": "frontend",
-    "build": "npm run build",
-    "document": "dist"
-  },
-  "functions": [
-    {
-      "name": "api",
-      "type": "advancedio",
-      "stack": "python3.11",
-      "source": "backend"
-    }
-  ]
+  "functions": {
+    "targets": [
+      "backend"
+    ]
+  }
 }
