@@ -247,7 +247,7 @@ const AnalyticsView = ({
             }}
           >
             <Cpu size={13} className={aiSummaryLoading ? 'spin' : ''} style={{ color: 'var(--accent-blue)' }} />
-            {aiSummaryLoading ? 'Generating AI Brief...' : 'Generate Local AI Threat Brief'}
+            {aiSummaryLoading ? 'Generating AI Brief...' : 'Generate AI Threat Brief'}
           </Button>
 
           <Button 
@@ -284,7 +284,7 @@ const AnalyticsView = ({
               </span>
             </div>
             <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(127, 191, 91, 0.15)', color: 'var(--accent-green)', fontWeight: '700', border: '1px solid rgba(127, 191, 91, 0.3)' }}>
-              MODEL: {aiSummary.model_used || 'local-ollama'}
+              MODEL: {aiSummary.model_used || 'gemini-1.5-flash'}
             </span>
           </div>
 
