@@ -22,18 +22,18 @@ def _calculate_pure_risk(inc_count, population, unemployment, urbanization, lite
 
 @router.get("/scores")
 def get_risk_scores_api(db: Session = Depends(get_db)):
-    incidents = db.query(CaseMaster).join(Unit).join(District).all()
-    if not incidents:
-        return []
+    rows = db.query(
+        District.DistrictName,
+        func.substr(CaseMaster.CrimeRegisteredDate, 1, 7).label("month"),
+        func.count(CaseMaster.CaseMasterID).label("cnt")
+    ).join(Unit, CaseMaster.UnitID == Unit.UnitID)\
+     .join(District, Unit.DistrictID == District.DistrictID)\
+     .group_by(District.DistrictName, "month").all()
 
-    # Map district -> month -> count
-    district_monthly = defaultdict(lambda: defaultdict(int))
-    for inc in incidents:
-        if inc.unit and inc.unit.district:
-            d_name = inc.unit.district.DistrictName
-            m_str = (inc.CrimeRegisteredDate or '')[:7]
-            if d_name and m_str:
-                district_monthly[d_name][m_str] += 1
+    district_monthly = defaultdict(dict)
+    for d_name, m_str, c_count in rows:
+        if d_name and m_str:
+            district_monthly[d_name][m_str] = c_count
 
     socio = db.query(DistrictSocioeconomic).join(District).all()
     results = []

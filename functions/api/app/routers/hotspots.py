@@ -28,7 +28,7 @@ def get_hotspots_api(
     if end_date:
         query = query.filter(CaseMaster.CrimeRegisteredDate <= end_date)
 
-    incidents = query.all()
+    incidents = query.order_by(CaseMaster.CrimeRegisteredDate.desc()).limit(400).all()
     features = detect_hotspots(incidents, eps=eps, min_samples=min_samples)
     
     return {
