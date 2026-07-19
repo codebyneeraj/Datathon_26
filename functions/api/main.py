@@ -20,12 +20,6 @@ from app.main import app as fastapi_app
 from app.database import engine
 from app.models import Base
 
-# Ensure database tables exist
-try:
-    Base.metadata.create_all(bind=engine)
-except Exception as e:
-    logger.warning(f"Table creation warning: {e}")
-
 # Convert FastAPI ASGI app to WSGI using a2wsgi
 from a2wsgi import ASGIMiddleware
 wsgi_app = ASGIMiddleware(fastapi_app)

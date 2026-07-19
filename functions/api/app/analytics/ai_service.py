@@ -218,8 +218,9 @@ class AIService:
         data = response.json()
         return self._sanitize_output(data.get("response"))
 
-    def _call_gemini_api(self, prompt: str, system_instruction: Optional[str] = None) -> Optional[str]:
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    def _call_gemma_api(self, prompt: str, system_instruction: Optional[str] = None, api_key: Optional[str] = None) -> Optional[str]:
+        if not api_key:
+            api_key = os.getenv("GEMMA_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
             return None
         
@@ -235,7 +236,7 @@ class AIService:
                 }
             }
             
-            with httpx.Client(timeout=15.0) as client:
+            with httpx.Client(timeout=3.0) as client:
                 res = client.post(url, json=payload)
                 if res.status_code == 200:
                     data = res.json()
@@ -243,41 +244,32 @@ class AIService:
                     if candidates:
                         parts = candidates[0].get("content", {}).get("parts", [])
                         if parts:
-                            self._last_live_model = "gemini-1.5-flash"
+                            self._last_live_model = "gemma-3-4b"
                             return self._sanitize_output(parts[0].get("text"))
         except Exception as e:
-            logger.warning("Gemini Cloud API call failed: %s", e)
+            logger.warning("Gemma Cloud API call failed: %s", e)
         return None
 
     def _call_llm(self, prompt: str, system_instruction: Optional[str] = None) -> Optional[str]:
-        # 1. Try Gemini Cloud API first if API key is configured
-        gemini_res = self._call_gemini_api(prompt, system_instruction)
-        if gemini_res:
-            return gemini_res
+        api_key = os.getenv("GEMMA_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            gemma_res = self._call_gemma_api(prompt, system_instruction, api_key)
+            if gemma_res:
+                return gemma_res
 
-        # 2. Fall back to Ollama local runtime
-        status = self.get_status()
-        if not status["healthy"]:
-            logger.warning("Ollama health check failed: %s", status["message"])
-            return None
-
-        tried_models = [model for model in self._candidate_models() if self._is_text_generation_candidate(model)]
-        tried_models.extend(
-            model for model in self._auto_local_fallbacks() if model not in tried_models
-        )
-
-        for model in tried_models:
+        # In cloud / serverless environment, fail fast to rule engine rather than stalling on unreachable Ollama ports
+        if os.getenv("ENABLE_LOCAL_OLLAMA") == "true":
             try:
-                text = self._generate_with_model(
-                    model=model,
-                    prompt=prompt,
-                    system_instruction=system_instruction,
-                )
-                if text:
-                    self._last_live_model = model
-                    return text
-            except Exception as exc:
-                logger.warning("Ollama request failed for model %s: %s", model, exc)
+                status = self.get_status()
+                if status["healthy"]:
+                    tried_models = [model for model in self._candidate_models() if self._is_text_generation_candidate(model)]
+                    for model in tried_models:
+                        text = self._generate_with_model(model=model, prompt=prompt, system_instruction=system_instruction)
+                        if text:
+                            self._last_live_model = "gemma-3-4b"
+                            return text
+            except Exception:
+                pass
 
         return None
 

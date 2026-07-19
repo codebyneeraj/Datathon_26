@@ -5,7 +5,7 @@ import { api } from '../api';
 const INITIAL_MESSAGES = [
   {
     sender: 'ai',
-    text: 'Tactical AI Command Assistant online (Powered by Gemma / Gemini Cloud AI). Ask me about district threat levels, suspect link graphs, or spatial crime hotspots.',
+    text: 'Tactical AI Command Assistant online (Powered by Gemma 3 LLM). Ask me about district threat levels, suspect link graphs, or spatial crime hotspots.',
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 ];
@@ -45,7 +45,7 @@ const AIAssistantWidget = () => {
         const aiMsg = {
           sender: 'ai',
           text: res.response,
-          model: res.model_used || 'gemini-1.5-flash',
+          model: res.model_used || 'gemma-3-4b',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setMessages(prev => [...prev, aiMsg]);
@@ -55,7 +55,7 @@ const AIAssistantWidget = () => {
         console.error("AI Assistant error:", err);
         const errorMsg = {
           sender: 'ai',
-          text: "System response degraded: Unable to reach the AI cloud endpoint. Reverting to rule-based tactical assistant.",
+          text: "System response degraded: Reverting to rule-based tactical assistant.",
           isError: true,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
@@ -153,7 +153,7 @@ const AIAssistantWidget = () => {
                 <span style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   AI Assistant
                   <span style={{ fontSize: '0.6rem', padding: '1px 6px', background: 'rgba(127,191,91,0.15)', color: 'var(--accent-green)', borderRadius: '4px', border: '1px solid rgba(127,191,91,0.3)' }}>
-                    GEMINI AI
+                    GEMMA AI
                   </span>
                 </span>
                 <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Intelligence & Field Query Assistant</span>
@@ -205,7 +205,7 @@ const AIAssistantWidget = () => {
                   {msg.text}
                 </div>
                 <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0 4px' }}>
-                  {msg.sender === 'ai' ? (msg.model || 'gemini-1.5-flash') : 'You'} • {msg.time}
+                  {msg.sender === 'ai' ? (msg.model || 'gemma-3-4b') : 'You'} • {msg.time}
                 </span>
               </div>
             ))}
@@ -213,7 +213,7 @@ const AIAssistantWidget = () => {
             {loading && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', width: 'fit-content' }}>
                 <Sparkles size={14} className="spin" style={{ color: 'var(--accent-blue)' }} />
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Google Gemma / Gemini AI generating intelligence response...</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Gemma 3 AI generating intelligence response...</span>
               </div>
             )}
             <div ref={chatEndRef} />

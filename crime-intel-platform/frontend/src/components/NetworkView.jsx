@@ -530,7 +530,7 @@ const NetworkView = ({ accusedId, accusedName }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={{ fontSize: '0.55rem', padding: '2px 6px', background: 'rgba(127,191,91,0.15)', color: 'var(--accent-green)', borderRadius: '3px', whiteSpace: 'nowrap' }}>
-            {aiInsightLoading ? 'ANALYZING' : (aiInsight?.model_used || 'gemini-1.5-flash')}
+            {aiInsightLoading ? 'ANALYZING' : (aiInsight?.model_used || 'gemma-3-4b')}
           </span>
           <button
             onClick={() => {
