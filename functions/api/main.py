@@ -33,9 +33,18 @@ wsgi_app = ASGIMiddleware(fastapi_app)
 
 def handler(request: Request):
     """
-    Catalyst Advanced I/O handler.
+    Catalyst Advanced I/O handler with CORS preflight and path normalization.
     Bridges Flask request -> FastAPI ASGI app via WSGI adapter.
     """
+    # 1. Handle OPTIONS CORS Preflight Requests immediately
+    if request.method == "OPTIONS":
+        resp = make_response("", 204)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "*"
+        resp.headers["Access-Control-Max-Age"] = "86400"
+        return resp
+
     try:
         environ = request.environ.copy()
 
@@ -78,12 +87,19 @@ def handler(request: Request):
                 if name.lower() != "content-length":
                     resp.headers[name] = value
 
+        # Explicitly set CORS headers on all responses
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "*"
+
         return resp
 
     except Exception as e:
         logger.error(f"Handler error: {e}", exc_info=True)
-        return make_response(
+        err_resp = make_response(
             json.dumps({"error": str(e)}),
             500,
             {"Content-Type": "application/json"}
         )
+        err_resp.headers["Access-Control-Allow-Origin"] = "*"
+        return err_resp

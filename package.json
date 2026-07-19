@@ -1,0 +1,8 @@
+{
+  "name": "datathon-26",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix crime-intel-platform/frontend install && npm --prefix crime-intel-platform/frontend run build && node -e \"require('fs').cpSync('crime-intel-platform/frontend/dist', 'dist', {recursive: true})\""
+  }
+}
