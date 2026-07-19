@@ -3,5 +3,13 @@
     "source": "crime-intel-platform/frontend",
     "build": "npm run build",
     "document": "dist"
-  }
+  },
+  "functions": [
+    {
+      "name": "api",
+      "type": "advancedio",
+      "stack": "python3.11",
+      "source": "crime-intel-platform/backend"
+    }
+  ]
 }
