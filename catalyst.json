@@ -1,7 +1,7 @@
 {
   "functions": {
     "targets": [
-      "functions/api"
+      "api"
     ]
   }
 }
