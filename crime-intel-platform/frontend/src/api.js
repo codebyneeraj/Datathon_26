@@ -1,7 +1,7 @@
 /**
  * API base URL resolved from environment variables or defaulting to localhost:8000
  */
-const DEFAULT_URL = import.meta.env.PROD ? '/server/api' : 'http://localhost:8000/api';
+const DEFAULT_URL = 'https://project-rainfall-60078587276.development.catalystserverless.in/server/api';
 const RAW_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_URL).trim();
 const CLEAN_RAW = RAW_BASE_URL.replace(/\/$/, '');
 const BASE_URL = CLEAN_RAW.endsWith('/api') ? CLEAN_RAW.slice(0, -4) : CLEAN_RAW;
