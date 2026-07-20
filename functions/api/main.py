@@ -30,13 +30,16 @@ def handler(request: Request):
     Catalyst Advanced I/O handler with CORS preflight and path normalization.
     Bridges Flask request -> FastAPI ASGI app via WSGI adapter.
     """
+    req_origin = request.headers.get("Origin", "*") or "*"
+
     # 1. Handle OPTIONS CORS Preflight Requests immediately
     if request.method == "OPTIONS":
-        resp = make_response("", 204)
-        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp = make_response("OK", 200)
+        resp.headers["Access-Control-Allow-Origin"] = req_origin
         resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept, *"
         resp.headers["Access-Control-Max-Age"] = "86400"
+        resp.headers["Content-Type"] = "text/plain"
         return resp
 
     try:
@@ -82,9 +85,9 @@ def handler(request: Request):
                     resp.headers[name] = value
 
         # Explicitly set CORS headers on all responses
-        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Origin"] = req_origin
         resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept, *"
 
         return resp
 
@@ -95,5 +98,5 @@ def handler(request: Request):
             500,
             {"Content-Type": "application/json"}
         )
-        err_resp.headers["Access-Control-Allow-Origin"] = "*"
+        err_resp.headers["Access-Control-Allow-Origin"] = req_origin
         return err_resp
