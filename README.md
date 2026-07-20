@@ -1,34 +1,64 @@
-# Crime Intelligence & Analytical Platform (SCRB Console)
+# State Crime Records Bureau (SCRB) Crime Intelligence & Analytical Platform
 
-An enterprise-grade, intelligence-driven command dashboard developed for the State Crime Records Bureau (SCRB). The platform breaks down manual data silos, running density-based spatial clustering and graph-theoretic link analysis to uncover spatiotemporal hotspots and organize criminal syndicates.
+An enterprise-grade, AI-driven crime intelligence command console developed for the State Crime Records Bureau (SCRB), Karnataka State Police. The platform breaks down manual data silos, running density-based spatial clustering and graph-theoretic link analysis to uncover spatiotemporal hotspots, track repeat offenders, and organize criminal syndicates.
+
+---
+
+## 🌟 Live Links & Deployment
+- **Live Deployed Application (Zoho Catalyst)**: [https://project-rainfall-60078587276.development.catalystserverless.in/app/index.html](https://project-rainfall-60078587276.development.catalystserverless.in/app/index.html)
+- **Live Backend API Base URL**: `https://project-rainfall-60078587276.development.catalystserverless.in/server/api/`
+- **GitHub Repository**: [https://github.com/codebyneeraj/Datathon_26](https://github.com/codebyneeraj/Datathon_26)
 
 ---
 
 ## 🚀 Key Capabilities
-*   **Spatiotemporal DBSCAN Hotspots:** Pinpoint high-density crime regions on an interactive Leaflet map.
-*   **Topological Link Analysis:** Graph relationships (Accused ⟷ Incident ⟷ Location ⟷ Victim) with centrality scoring via Cytoscape.js & NetworkX.
-*   **Socioeconomic Correlation:** Pearson analysis comparing crime rates against unemployment, urbanization, and literacy.
-*   **Predictive Risk Model:** Random Forest threat classification.
-*   **AI Command Assistant:** Automated briefing generator (Gemma AI) and conversational widget.
+
+### 📍 1. Spatiotemporal DBSCAN Hotspot Detection
+- **Density Clustering**: Pinpoints high-density crime regions using Density-Based Spatial Clustering of Applications with Noise (DBSCAN) on geocoded FIR coordinates.
+- **Geospatial Mapping**: Renders interactive crime cluster centroids, incident radii, and multi-district filter controls on a dark-mode Leaflet map.
+
+### 🕸️ 2. Criminological Link Analysis & Syndicate Topology
+- **Relational Graph Mapping**: Built on NetworkX and Cytoscape.js to visually map `Accused ⟷ Incident ⟷ Location ⟷ Victim` relationships.
+- **Degree Centrality Scoring**: Calculates graph centrality to isolate syndicate hubs, bridge suspects, and repeat offender networks.
+
+### 📊 3. Sociological & Predictive Risk Engine
+- **Socioeconomic Correlation**: Uses Pearson correlation metrics comparing regional crime rates against unemployment, urbanization, and literacy rates.
+- **Predictive Risk Classification**: Machine learning model (Random Forest heuristic) computing 0–100 threat risk levels (*Low*, *Medium*, *High*).
+- **Baseline Anomaly Spikes**: Flags sudden regional crime spikes deviating from historical baselines.
+
+### 🤖 4. Tactical Command AI Briefings (`gemma-4-31b-it`)
+- **Automated Briefing Generator**: Generates structured tactical briefs (Executive Summary, Critical Risk Drivers, Tactical Recommendations) powered by Google's `gemma-4-31b-it` model.
+- **Command AI Chat Widget**: Interactive command console for natural language querying of crime trends, suspect networks, and operational protocols.
 
 ---
 
 ## 🛠️ Repository & Project Structure
+
 ```
-crime-intel-platform/
-├── backend/                  # FastAPI Application
-│   ├── app/
-│   │   ├── analytics/        # DBSCAN, NetworkX, and AI Service
-│   │   ├── routers/          # API endpoints (risk, hotspots, network, etc.)
-│   │   ├── models.py         # SQLAlchemy schemas
-│   │   └── database.py       # SQLite connection setup
-│   └── requirements.txt
-└── frontend/                 # React Static Client
-    ├── src/
-    │   ├── components/       # MapView, NetworkView, CorrelationChart, etc.
-    │   ├── App.jsx           # Shell and layout
-    │   └── api.js            # Unified API fetch client
-    └── package.json
+.
+├── crime-intel-platform/
+│   ├── frontend/             # React 18 + Vite Frontend Application
+│   │   ├── src/
+│   │   │   ├── components/   # MapView, NetworkView, CorrelationChart, Card UI
+│   │   │   ├── App.jsx       # Main Dashboard Layout
+│   │   │   └── api.js        # Centralized API Fetch Client
+│   │   ├── dist/             # Compiled Production Client Bundle
+│   │   └── package.json
+│   └── backend/              # Standalone Local Backend Reference
+├── functions/
+│   └── api/                  # Zoho Catalyst Advanced I/O Python Function
+│       ├── app/
+│       │   ├── analytics/    # DBSCAN, NetworkX, AI Service (`gemma-4-31b-it`)
+│       │   ├── routers/      # FastAPI endpoints (hotspots, network, risk, ai)
+│       │   ├── models.py     # SQLAlchemy ORM Schemas
+│       │   └── database.py   # SQLite Connection Setup
+│       ├── main.py           # Catalyst WSGI / Flask Handler Entrypoint
+│       ├── crime_db.db       # Relational FIR Database
+│       ├── catalyst-config.json
+│       └── requirements.txt
+├── catalyst.json             # Zoho Catalyst Deployment Descriptor
+├── .gitignore
+└── README.md
 ```
 
 ---
@@ -36,13 +66,13 @@ crime-intel-platform/
 ## 💻 Local Setup & Execution Instructions
 
 ### Prerequisites
-*   Python 3.11 or higher
-*   Node.js v18 or higher
+- Python 3.11 or higher
+- Node.js v18 or higher
 
 ### 1. Backend Setup
-1. Navigate to the backend directory:
+1. Navigate to the backend function directory:
    ```bash
-   cd crime-intel-platform/backend
+   cd functions/api
    ```
 2. Create and activate a virtual environment:
    ```bash
@@ -56,18 +86,18 @@ crime-intel-platform/
    ```bash
    pip install -r requirements.txt
    ```
-4. Start the FastAPI development server:
+4. Start the FastAPI local server:
    ```bash
    uvicorn app.main:app --port 8000 --reload
    ```
-   *The API will be available at: http://127.0.0.1:8000*
+   *API available at:* `http://127.0.0.1:8000`
 
 ### 2. Frontend Setup
 1. Open a new terminal and navigate to the frontend directory:
    ```bash
    cd crime-intel-platform/frontend
    ```
-2. Install npm dependencies:
+2. Install dependencies:
    ```bash
    npm install
    ```
@@ -75,65 +105,23 @@ crime-intel-platform/
    ```bash
    npm run dev
    ```
-   *The UI will be accessible at: http://localhost:5173 (or the port specified in terminal)*
-
-### 3. Verifying the Platform
-To verify the databases, models, and graph engines, run the test suite:
-```bash
-cd crime-intel-platform
-backend\.venv\Scripts\python verify_analytics.py
-```
-All tests should return `[OK]`.
+   *Dashboard available at:* `http://localhost:5173`
 
 ---
 
-## ☁️ Zoho Catalyst Deployment Guide
-The organizers require deployment exclusively on the **Zoho Catalyst** platform. Follow these steps to deploy this multi-tier application:
+## ☁️ Zoho Catalyst Deployment
 
-### Step 1: Initialize Catalyst Project
-1. Install the Catalyst CLI globally:
-   ```bash
-   npm install -g zcatalyst-cli
-   ```
-2. Log in to your Zoho account:
-   ```bash
-   catalyst login
-   ```
-3. Initialize the project inside `crime-intel-platform/`:
-   ```bash
-   catalyst init
-   ```
-   * Select **Hosting** (for the React frontend static build).
-   * Select **Functions** ➔ **Advanced I/O** (Python) for the FastAPI backend.
+The project is configured for serverless deployment on **Zoho Catalyst**:
 
-### Step 2: Configure FastAPI as a Catalyst Function
-1. Rename the initialization folder generated for the Python function to match your api structure, or migrate the contents of `backend/app` into the function folder.
-2. In the function configuration (`catalyst-config.json` inside your function folder), specify the entry point. Catalyst uses WSGI/ASGI wrappers. Wrap your FastAPI app using `mangum` or a direct Catalyst Advanced I/O handler:
-   ```json
-   {
-     "deployment": {
-       "stack": "python3.9",
-       "entry_point": "app.main.app"
-     }
-   }
-   ```
-3. Ensure `requirements.txt` is updated in your function directory.
-
-### Step 3: Configure Frontend Build
-1. In `frontend/src/api.js`, update the base URL to point to the live Catalyst function URL:
-   ```javascript
-   const VITE_API_BASE_URL = 'https://<your-catalyst-project-subdomain>.catalystserverless.com/server/api';
-   ```
-2. Build the production assets:
-   ```bash
-   cd frontend
-   npm run build
-   ```
-3. Move the compiled contents of `frontend/dist/` into the `hosting/` directory initialized by Catalyst.
-
-### Step 4: Deploy
-Deploy the entire application to the cloud:
 ```bash
+# Log in to Zoho Catalyst CLI
+catalyst login
+
+# Deploy Advanced I/O Python functions and Web Client
 catalyst deploy
 ```
-Catalyst will output the live **App URL** (hosting) and **Function URL** (backend API).
+
+---
+
+## 📄 License
+Developed for the State Crime Records Bureau (SCRB) Datathon 2026.
