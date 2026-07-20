@@ -60,6 +60,11 @@ def handler(request: Request):
         if not clean_path:
             clean_path = '/'
 
+        import io
+        body_bytes = request.get_data()
+        environ['wsgi.input'] = io.BytesIO(body_bytes)
+        environ['CONTENT_LENGTH'] = str(len(body_bytes))
+
         environ['SCRIPT_NAME'] = ''
         environ['PATH_INFO'] = clean_path
 

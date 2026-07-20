@@ -8,5 +8,8 @@
   },
   "client": {
     "source": "crime-intel-platform/frontend/dist"
+  },
+  "apig": {
+    "enabled": false
   }
 }

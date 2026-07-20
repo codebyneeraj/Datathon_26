@@ -25,8 +25,8 @@ _load_env()
 logger = logging.getLogger("ai_service")
 
 DEFAULT_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
-DEFAULT_FALLBACK_MODELS = os.getenv("OLLAMA_FALLBACK_MODELS", "phi4-mini,qwen2.5:3b")
+DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:31B-it")
+DEFAULT_FALLBACK_MODELS = os.getenv("OLLAMA_FALLBACK_MODELS", "gemma3:4b,phi4-mini,qwen2.5:3b")
 DEFAULT_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "90"))
 DEFAULT_CONNECT_TIMEOUT = float(os.getenv("OLLAMA_CONNECT_TIMEOUT_SECONDS", "5"))
 DEFAULT_HEALTH_TTL = float(os.getenv("OLLAMA_HEALTH_TTL_SECONDS", "20"))
@@ -35,6 +35,7 @@ DEFAULT_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.2"))
 DEFAULT_TOP_P = float(os.getenv("OLLAMA_TOP_P", "0.9"))
 DEFAULT_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "10m")
 AUTO_LOCAL_MODEL_PREFERENCES = [
+    "gemma4:31B-it",
     "gemma3:4b",
     "gemma:2b",
     "qwen2.5:3b",
@@ -220,34 +221,51 @@ class AIService:
 
     def _call_gemma_api(self, prompt: str, system_instruction: Optional[str] = None, api_key: Optional[str] = None) -> Optional[str]:
         if not api_key:
-            api_key = os.getenv("GEMMA_API_KEY") or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GEMMA_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
             return None
         
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-            
-            full_prompt = f"System Instruction:\n{system_instruction}\n\nUser Request:\n{prompt}" if system_instruction else prompt
-            payload = {
-                "contents": [{"parts": [{"text": full_prompt}]}],
-                "generationConfig": {
-                    "temperature": self.temperature,
-                    "maxOutputTokens": self.num_predict
-                }
+        configured_model = os.getenv("GEMMA_MODEL") or os.getenv("GEMINI_MODEL") or os.getenv("OLLAMA_MODEL") or "gemma-4-31b-it"
+        norm_model = configured_model.lower().replace(":", "-").replace("_", "-")
+        if norm_model in ["gemma4-31b-cloud", "gemma4-31b-it", "gemma-4-31b", "gemma4:31b-it", "gemma4:31b-cloud"]:
+            norm_model = "gemma-4-31b-it"
+
+        models_to_try = [
+            norm_model,
+            "gemma-4-31b-it",
+            "gemma-4-26b-a4b-it",
+            "gemini-2.5-flash"
+        ]
+        # Remove duplicates preserving order
+        models_to_try = list(dict.fromkeys(models_to_try))
+
+        full_prompt = f"System Instruction:\n{system_instruction}\n\nUser Request:\n{prompt}" if system_instruction else prompt
+        payload = {
+            "contents": [{"parts": [{"text": full_prompt}]}],
+            "generationConfig": {
+                "temperature": self.temperature,
+                "maxOutputTokens": self.num_predict
             }
-            
-            with httpx.Client(timeout=3.0) as client:
-                res = client.post(url, json=payload)
-                if res.status_code == 200:
-                    data = res.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            self._last_live_model = "gemma-3-4b"
-                            return self._sanitize_output(parts[0].get("text"))
-        except Exception as e:
-            logger.warning("Gemma Cloud API call failed: %s", e)
+        }
+        
+        with httpx.Client(timeout=15.0) as client:
+            for model_name in models_to_try:
+                try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                    res = client.post(url, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts:
+                                self._last_live_model = f"Google {model_name}"
+                                return self._sanitize_output(parts[0].get("text"))
+                    else:
+                        logger.warning("Gemini API call to %s failed with status %s: %s", model_name, res.status_code, res.text[:200])
+                except Exception as e:
+                    logger.warning("Gemini API call to %s exception: %s", model_name, e)
+
         return None
 
     def _call_llm(self, prompt: str, system_instruction: Optional[str] = None) -> Optional[str]:
