@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import hotspots, network, correlations, risk, ai
+from .routers import hotspots, network, correlations, risk, ai, dashboard
 
 app = FastAPI(
     title="Crime Intelligence & Analytical Platform API",
@@ -12,12 +12,13 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # For hackathon, allow all origins
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
+app.include_router(dashboard.router)
 app.include_router(hotspots.router)
 app.include_router(network.router)
 app.include_router(correlations.router)

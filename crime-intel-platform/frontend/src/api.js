@@ -77,6 +77,16 @@ async function request(endpoint, options = {}, _retries = 2) {
  */
 export const api = {
   /**
+   * Consolidated single-pass initialization endpoint for instant dashboard loading
+   * @param {string} [district] - Optional district filter
+   * @returns {Promise<{hotspots: Object, risk_scores: Array, correlations: Object}>}
+   */
+  getDashboardInit: (district) => {
+    const q = district ? `?district=${encodeURIComponent(district)}` : '';
+    return request(`/api/dashboard/init${q}`);
+  },
+
+  /**
    * Fetches DBSCAN crime hotspots
    * @param {string} [district] - Optional district filter
    * @param {number} [eps] - Optional DBSCAN eps

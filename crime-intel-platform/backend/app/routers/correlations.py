@@ -1,31 +1,51 @@
-import pandas as pd
+import math
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from ..database import get_db
 from ..models import CaseMaster, District, Unit, DistrictSocioeconomic
 
+import time
+
 router = APIRouter(prefix="/api/correlations", tags=["correlations"])
 
+_CORRELATIONS_CACHE = None
+_CORRELATIONS_CACHE_TIME = 0
+_CORRELATIONS_CACHE_TTL = 300
+
+def _pearson_corr(x, y):
+    n = len(x)
+    if n < 2:
+        return 0.0
+    mx = sum(x) / n
+    my = sum(y) / n
+    vx = sum((a - mx)**2 for a in x)
+    vy = sum((b - my)**2 for b in y)
+    if vx == 0 or vy == 0:
+        return 0.0
+    cov = sum((a - mx) * (b - my) for a, b in zip(x, y))
+    r = cov / math.sqrt(vx * vy)
+    return round(r, 3)
+
 @router.get("")
+@router.get("/")
 def get_correlations_api(db: Session = Depends(get_db)):
-    # 1. Query crime counts per district
+    global _CORRELATIONS_CACHE, _CORRELATIONS_CACHE_TIME
+    now = time.time()
+    if _CORRELATIONS_CACHE is not None and (now - _CORRELATIONS_CACHE_TIME < _CORRELATIONS_CACHE_TTL):
+        return _CORRELATIONS_CACHE
     crime_counts = db.query(
         District.DistrictName,
         func.count(CaseMaster.CaseMasterID).label("crime_count")
     ).select_from(CaseMaster).join(Unit).join(District).group_by(District.DistrictName).all()
     
     crime_map = {dist_name: count for dist_name, count in crime_counts}
-    
-    # 2. Query socio-economic details
     socio_stats = db.query(DistrictSocioeconomic).join(District).all()
     
-    # Align data
     aligned_data = []
     for stat in socio_stats:
         dist_name = stat.district.DistrictName
         count = crime_map.get(dist_name, 0)
-        # Crime rate per 100,000 citizens
         crime_rate = round((count / stat.population) * 100000, 2) if stat.population > 0 else 0.0
         
         aligned_data.append({
@@ -48,24 +68,19 @@ def get_correlations_api(db: Session = Depends(get_db)):
             }
         }
         
-    # Convert to DataFrame to calculate Pearson correlation
-    df = pd.DataFrame(aligned_data)
+    rates = [d["crime_rate"] for d in aligned_data]
+    unemp = [d["unemployment_rate"] for d in aligned_data]
+    urban = [d["urbanization_index"] for d in aligned_data]
+    lit = [d["literacy_rate"] for d in aligned_data]
     
-    # Compute correlations
-    corr_unemployment = float(df["crime_rate"].corr(df["unemployment_rate"], method="pearson"))
-    corr_urbanization = float(df["crime_rate"].corr(df["urbanization_index"], method="pearson"))
-    corr_literacy = float(df["crime_rate"].corr(df["literacy_rate"], method="pearson"))
-    
-    # Replace NaN values with 0.0
-    corr_unemployment = 0.0 if pd.isna(corr_unemployment) else round(corr_unemployment, 3)
-    corr_urbanization = 0.0 if pd.isna(corr_urbanization) else round(corr_urbanization, 3)
-    corr_literacy = 0.0 if pd.isna(corr_literacy) else round(corr_literacy, 3)
-    
-    return {
+    res = {
         "districts": aligned_data,
         "correlations": {
-            "unemployment": corr_unemployment,
-            "urbanization": corr_urbanization,
-            "literacy": corr_literacy
+            "unemployment": _pearson_corr(rates, unemp),
+            "urbanization": _pearson_corr(rates, urban),
+            "literacy": _pearson_corr(rates, lit)
         }
     }
+    _CORRELATIONS_CACHE = res
+    _CORRELATIONS_CACHE_TIME = now
+    return res

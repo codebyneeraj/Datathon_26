@@ -7,7 +7,13 @@ from sqlalchemy import func
 from ..database import get_db
 from ..models import CaseMaster, DistrictSocioeconomic, Accused, District, Unit, CaseStatusMaster
 
+import time
+
 router = APIRouter(prefix="/api/risk", tags=["risk"])
+
+_RISK_SCORES_CACHE = None
+_RISK_SCORES_CACHE_TIME = 0
+_RISK_SCORES_CACHE_TTL = 300
 
 def _calculate_pure_risk(inc_count, population, unemployment, urbanization, literacy):
     # Normalized risk heuristic derived from threat model factors
@@ -22,6 +28,10 @@ def _calculate_pure_risk(inc_count, population, unemployment, urbanization, lite
 
 @router.get("/scores")
 def get_risk_scores_api(db: Session = Depends(get_db)):
+    global _RISK_SCORES_CACHE, _RISK_SCORES_CACHE_TIME
+    now = time.time()
+    if _RISK_SCORES_CACHE is not None and (now - _RISK_SCORES_CACHE_TIME < _RISK_SCORES_CACHE_TTL):
+        return _RISK_SCORES_CACHE
     rows = db.query(
         District.DistrictName,
         func.substr(CaseMaster.CrimeRegisteredDate, 1, 7).label("month"),
@@ -91,6 +101,8 @@ def get_risk_scores_api(db: Session = Depends(get_db)):
             "literacy_rate": s.literacy_rate
         })
 
+    _RISK_SCORES_CACHE = results
+    _RISK_SCORES_CACHE_TIME = now
     return results
 
 

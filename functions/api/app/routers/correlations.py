@@ -5,7 +5,13 @@ from sqlalchemy import func
 from ..database import get_db
 from ..models import CaseMaster, District, Unit, DistrictSocioeconomic
 
+import time
+
 router = APIRouter(prefix="/api/correlations", tags=["correlations"])
+
+_CORRELATIONS_CACHE = None
+_CORRELATIONS_CACHE_TIME = 0
+_CORRELATIONS_CACHE_TTL = 300
 
 def _pearson_corr(x, y):
     n = len(x)
@@ -24,6 +30,10 @@ def _pearson_corr(x, y):
 @router.get("")
 @router.get("/")
 def get_correlations_api(db: Session = Depends(get_db)):
+    global _CORRELATIONS_CACHE, _CORRELATIONS_CACHE_TIME
+    now = time.time()
+    if _CORRELATIONS_CACHE is not None and (now - _CORRELATIONS_CACHE_TIME < _CORRELATIONS_CACHE_TTL):
+        return _CORRELATIONS_CACHE
     crime_counts = db.query(
         District.DistrictName,
         func.count(CaseMaster.CaseMasterID).label("crime_count")
@@ -63,7 +73,7 @@ def get_correlations_api(db: Session = Depends(get_db)):
     urban = [d["urbanization_index"] for d in aligned_data]
     lit = [d["literacy_rate"] for d in aligned_data]
     
-    return {
+    res = {
         "districts": aligned_data,
         "correlations": {
             "unemployment": _pearson_corr(rates, unemp),
@@ -71,3 +81,6 @@ def get_correlations_api(db: Session = Depends(get_db)):
             "literacy": _pearson_corr(rates, lit)
         }
     }
+    _CORRELATIONS_CACHE = res
+    _CORRELATIONS_CACHE_TIME = now
+    return res

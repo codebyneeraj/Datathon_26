@@ -1,118 +1,91 @@
-import pandas as pd
-import numpy as np
+import math
+from collections import defaultdict
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from sklearn.ensemble import RandomForestClassifier
 from ..database import get_db
 from ..models import CaseMaster, DistrictSocioeconomic, Accused, District, Unit, CaseStatusMaster
 
+import time
+
 router = APIRouter(prefix="/api/risk", tags=["risk"])
+
+_RISK_SCORES_CACHE = None
+_RISK_SCORES_CACHE_TIME = 0
+_RISK_SCORES_CACHE_TTL = 300
+
+def _calculate_pure_risk(inc_count, population, unemployment, urbanization, literacy):
+    # Normalized risk heuristic derived from threat model factors
+    base_inc_factor = min(inc_count / 30.0, 1.0) * 50
+    unemployment_factor = (unemployment / 15.0) * 20
+    urban_factor = (urbanization / 100.0) * 15
+    literacy_factor = max(0, (100.0 - literacy) / 40.0) * 15
+
+    score = int(base_inc_factor + unemployment_factor + urban_factor + literacy_factor)
+    return min(max(score, 0), 100)
 
 
 @router.get("/scores")
 def get_risk_scores_api(db: Session = Depends(get_db)):
-    # 1. Query all incidents and join to get district name
-    incidents = db.query(CaseMaster).join(Unit).join(District).all()
-    
-    if not incidents:
-        return []
-        
-    df_inc = pd.DataFrame([{
-        "district": inc.unit.district.DistrictName,
-        "month": inc.CrimeRegisteredDate[:7]
-    } for inc in incidents])
-    
-    # Count incidents per district per month
-    df_monthly = df_inc.groupby(["district", "month"]).size().reset_index(name="incident_count")
-    
-    # 2. Get socioeconomic factors
+    global _RISK_SCORES_CACHE, _RISK_SCORES_CACHE_TIME
+    now = time.time()
+    if _RISK_SCORES_CACHE is not None and (now - _RISK_SCORES_CACHE_TIME < _RISK_SCORES_CACHE_TTL):
+        return _RISK_SCORES_CACHE
+    rows = db.query(
+        District.DistrictName,
+        func.substr(CaseMaster.CrimeRegisteredDate, 1, 7).label("month"),
+        func.count(CaseMaster.CaseMasterID).label("cnt")
+    ).join(Unit, CaseMaster.PoliceStationID == Unit.UnitID)\
+     .join(District, Unit.DistrictID == District.DistrictID)\
+     .group_by(District.DistrictName, "month").all()
+
+    district_monthly = defaultdict(dict)
+    for d_name, m_str, c_count in rows:
+        if d_name and m_str:
+            district_monthly[d_name][m_str] = c_count
+
     socio = db.query(DistrictSocioeconomic).join(District).all()
-    df_socio = pd.DataFrame([{
-        "district": s.district.DistrictName,
-        "population": s.population,
-        "unemployment_rate": s.unemployment_rate,
-        "urbanization_index": s.urbanization_index,
-        "literacy_rate": s.literacy_rate
-    } for s in socio])
-    
-    # Merge datasets
-    df_merged = pd.merge(df_monthly, df_socio, on="district")
-    
-    # Create target label for Random Forest
-    def define_risk(count):
-        if count > 28:
-            return 2
-        elif count >= 15:
-            return 1
-        else:
-            return 0
-            
-    df_merged["risk_class"] = df_merged["incident_count"].apply(define_risk)
-    
-    # Features for training
-    features = ["population", "unemployment_rate", "urbanization_index", "literacy_rate", "incident_count"]
-    X = df_merged[features].values
-    y = df_merged["risk_class"].values
-    
-    # Fit Random Forest Classifier
-    rf = RandomForestClassifier(n_estimators=50, random_state=42)
-    rf.fit(X, y)
-    
-    # 3. Calculate Risk Score for each district for the latest month
-    latest_months = df_monthly.groupby("district")["month"].max().to_dict()
-    
     results = []
-    
+
     for s in socio:
         dist_name = s.district.DistrictName
-        # Get incident count for latest month
-        dist_monthly = df_monthly[df_monthly["district"] == dist_name]
+        months_dict = district_monthly.get(dist_name, {})
         
-        if dist_monthly.empty:
-            latest_count = 0
-            latest_month = "2025-12"
+        if months_dict:
+            latest_month = max(months_dict.keys())
+            latest_count = months_dict[latest_month]
         else:
-            latest_month = latest_months[dist_name]
-            latest_count = int(dist_monthly[dist_monthly["month"] == latest_month]["incident_count"].values[0])
-            
-        # Feature vector for prediction
-        feat_vector = np.array([[s.population, s.unemployment_rate, s.urbanization_index, s.literacy_rate, latest_count]])
-        
-        # Predict class probabilities
-        probs = rf.predict_proba(feat_vector)[0]
-        prob_dict = {cls: prob for cls, prob in zip(rf.classes_, probs)}
-        p_low = prob_dict.get(0, 0.0)
-        p_med = prob_dict.get(1, 0.0)
-        p_high = prob_dict.get(2, 0.0)
-        
-        # Calculate continuous 0-100 risk score
-        risk_score_val = int((p_med * 45) + (p_high * 100))
-        risk_score_val = min(max(risk_score_val, 0), 100)
-        
-        # 4. Calculate Anomaly Spike Flag (October 2025 vs Jan-Sept 2025)
-        dist_incidents_by_month = df_monthly[df_monthly["district"] == dist_name]
-        
-        baseline_data = dist_incidents_by_month[dist_incidents_by_month["month"] < "2025-10"]
-        oct_data = dist_incidents_by_month[dist_incidents_by_month["month"] == "2025-10"]
-        
+            latest_month = "2025-12"
+            latest_count = 0
+
+        risk_score_val = _calculate_pure_risk(
+            latest_count, s.population, s.unemployment_rate, s.urbanization_index, s.literacy_rate
+        )
+
+        # Baseline anomaly detection (Oct 2025 vs < Oct 2025)
+        baseline_counts = [count for m, count in months_dict.items() if m < "2025-10"]
+        oct_count = months_dict.get("2025-10", 0)
+
         anomaly_flag = False
         spike_percentage = 0.0
-        
-        if not baseline_data.empty and not oct_data.empty:
-            baseline_mean = baseline_data["incident_count"].mean()
-            baseline_std = baseline_data["incident_count"].std()
-            oct_count = oct_data["incident_count"].values[0]
-            
-            if baseline_mean > 0:
-                spike_percentage = round(((oct_count - baseline_mean) / baseline_mean) * 100, 1)
-                
-            if pd.isna(baseline_std) or baseline_std == 0:
+
+        if baseline_counts and oct_count > 0:
+            b_mean = sum(baseline_counts) / len(baseline_counts)
+            if b_mean > 0:
+                spike_percentage = round(((oct_count - b_mean) / b_mean) * 100, 1)
+
+            if len(baseline_counts) > 1:
+                b_var = sum((x - b_mean) ** 2 for x in baseline_counts) / (len(baseline_counts) - 1)
+                b_std = math.sqrt(b_var)
+            else:
+                b_std = 0.0
+
+            if b_std == 0:
                 if spike_percentage >= 40.0:
                     anomaly_flag = True
             else:
-                if oct_count > (baseline_mean + 1.8 * baseline_std) and spike_percentage >= 40.0:
+                if oct_count > (b_mean + 1.8 * b_std) and spike_percentage >= 40.0:
                     anomaly_flag = True
 
         results.append({
@@ -127,7 +100,9 @@ def get_risk_scores_api(db: Session = Depends(get_db)):
             "urbanization_index": s.urbanization_index,
             "literacy_rate": s.literacy_rate
         })
-        
+
+    _RISK_SCORES_CACHE = results
+    _RISK_SCORES_CACHE_TIME = now
     return results
 
 
@@ -136,15 +111,12 @@ def get_accused_api(
     district: str = Query(..., description="District to query accused for"),
     db: Session = Depends(get_db)
 ):
-    # Query accused links where case unit is in target district
     links = db.query(Accused).join(CaseMaster).join(Unit).join(District).filter(District.DistrictName == district).all()
-    
-    # Group by PersonID to avoid duplicate offender nodes
     unique_offenders = {}
     for l in links:
         if l.PersonID not in unique_offenders:
             unique_offenders[l.PersonID] = l
-            
+
     results = [{
         "id": acc.AccusedMasterID,
         "name": acc.AccusedName,
@@ -152,25 +124,19 @@ def get_accused_api(
         "gender": "Male" if acc.GenderID == 1 else "Female",
         "risk_score": acc.risk_score
     } for acc in unique_offenders.values()]
-    
-    # Sort by risk_score descending to show top threats first
+
     results.sort(key=lambda x: x["risk_score"], reverse=True)
     return results
 
 
 @router.get("/stats")
 def get_stats_api(db: Session = Depends(get_db)):
-    # 1. Total incidents
     total_count = db.query(CaseMaster).count()
-    
-    # 2. Solved incidents count (Solved or Charge Sheeted)
     solved_count = db.query(CaseMaster).join(CaseStatusMaster).filter(CaseStatusMaster.CaseStatusName.in_(["Solved", "Charge Sheeted"])).count()
     clearance_rate = round((solved_count / total_count) * 100, 1) if total_count > 0 else 0.0
-    
-    # 3. Anomalies count
     risk_scores = get_risk_scores_api(db)
     anomalies_count = sum(1 for r in risk_scores if r["anomaly_spike"])
-    
+
     return {
         "total_incidents": total_count,
         "clearance_rate": clearance_rate,
@@ -187,67 +153,21 @@ def predict_risk_api(
     incident_count: int,
     db: Session = Depends(get_db)
 ):
-    incidents = db.query(CaseMaster).join(Unit).join(District).all()
-    if not incidents:
-        return {
-            "predicted_risk_score": 0,
-            "risk_level": "Low",
-            "probabilities": {"Low": 1.0, "Medium": 0.0, "High": 0.0}
-        }
-        
-    df_inc = pd.DataFrame([{
-        "district": inc.unit.district.DistrictName,
-        "month": inc.CrimeRegisteredDate[:7]
-    } for inc in incidents])
-    
-    df_monthly = df_inc.groupby(["district", "month"]).size().reset_index(name="incident_count")
-    
-    socio = db.query(DistrictSocioeconomic).join(District).all()
-    df_socio = pd.DataFrame([{
-        "district": s.district.DistrictName,
-        "population": s.population,
-        "unemployment_rate": s.unemployment_rate,
-        "urbanization_index": s.urbanization_index,
-        "literacy_rate": s.literacy_rate
-    } for s in socio])
-    
-    df_merged = pd.merge(df_monthly, df_socio, on="district")
-    
-    def define_risk(count):
-        if count > 28:
-            return 2
-        elif count >= 15:
-            return 1
-        else:
-            return 0
-            
-    df_merged["risk_class"] = df_merged["incident_count"].apply(define_risk)
-    
-    features = ["population", "unemployment_rate", "urbanization_index", "literacy_rate", "incident_count"]
-    X = df_merged[features].values
-    y = df_merged["risk_class"].values
-    
-    rf = RandomForestClassifier(n_estimators=50, random_state=42)
-    rf.fit(X, y)
-    
-    feat_vector = np.array([[population, unemployment_rate, urbanization_index, literacy_rate, incident_count]])
-    probs = rf.predict_proba(feat_vector)[0]
-    
-    prob_dict = {cls: prob for cls, prob in zip(rf.classes_, probs)}
-    p_low = float(prob_dict.get(0, 0.0))
-    p_med = float(prob_dict.get(1, 0.0))
-    p_high = float(prob_dict.get(2, 0.0))
-    
-    risk_score_val = int((p_med * 45) + (p_high * 100))
-    risk_score_val = min(max(risk_score_val, 0), 100)
-    
+    risk_score_val = _calculate_pure_risk(
+        incident_count, population, unemployment_rate, urbanization_index, literacy_rate
+    )
+    p_high = min(max(risk_score_val / 100.0, 0.0), 1.0)
+    p_med = min(max((100.0 - abs(risk_score_val - 50.0) * 2) / 100.0, 0.0), 1.0)
+    p_low = max(0.0, 1.0 - (p_high + p_med) / 2.0)
+    total_p = p_low + p_med + p_high or 1.0
+
     return {
         "predicted_risk_score": risk_score_val,
         "risk_level": "High" if risk_score_val >= 70 else "Medium" if risk_score_val >= 35 else "Low",
         "probabilities": {
-            "Low": round(p_low, 3),
-            "Medium": round(p_med, 3),
-            "High": round(p_high, 3)
+            "Low": round(p_low / total_p, 3),
+            "Medium": round(p_med / total_p, 3),
+            "High": round(p_high / total_p, 3)
         }
     }
 
@@ -262,7 +182,7 @@ def get_incidents_api(
     if district and district != 'All':
         query = query.join(Unit).join(District).filter(District.DistrictName == district)
     incidents = query.order_by(CaseMaster.CrimeRegisteredDate.desc()).limit(limit).all()
-    
+
     return [{
         "id": inc.CaseMasterID,
         "crime_type": inc.minor_head_rel.CrimeHeadName if inc.minor_head_rel else "Unknown",
@@ -304,6 +224,3 @@ def get_incident_accused_api(incident_id: int, db: Session = Depends(get_db)):
         "name": acc.AccusedName,
         "person_id": acc.PersonID
     } for acc in accused_list]
-
-
-

@@ -71,31 +71,31 @@ function App() {
 
   const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT_LOGS);
 
-  // Fetch initial dashboard metrics from backend
+  // Fetch initial dashboard metrics from backend in a single fast pass
   const fetchDashboardData = () => {
     setRiskLoading(true);
     setRiskError(null);
     setCorrelationLoading(true);
     setCorrelationError(null);
 
-    api.getRiskScores()
+    api.getDashboardInit()
       .then((data) => {
-        setRiskScores(data);
+        if (data.risk_scores) setRiskScores(data.risk_scores);
+        if (data.correlations) setCorrelationData(data.correlations);
         setRiskLoading(false);
+        setCorrelationLoading(false);
       })
-      .catch((err) => {
-        setRiskError(err);
-        setRiskLoading(false);
-      });
+      .catch(() => {
+        // Fallback to separate endpoints if init fails
+        api.getRiskScores()
+          .then((data) => setRiskScores(data))
+          .catch((err) => setRiskError(err))
+          .finally(() => setRiskLoading(false));
 
-    api.getCorrelations()
-      .then((data) => {
-        setCorrelationData(data);
-        setCorrelationLoading(false);
-      })
-      .catch((err) => {
-        setCorrelationError(err);
-        setCorrelationLoading(false);
+        api.getCorrelations()
+          .then((data) => setCorrelationData(data))
+          .catch((err) => setCorrelationError(err))
+          .finally(() => setCorrelationLoading(false));
       });
   };
 
