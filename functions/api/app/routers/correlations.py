@@ -22,6 +22,7 @@ def _pearson_corr(x, y):
     return round(r, 3)
 
 @router.get("")
+@router.get("/")
 def get_correlations_api(db: Session = Depends(get_db)):
     crime_counts = db.query(
         District.DistrictName,

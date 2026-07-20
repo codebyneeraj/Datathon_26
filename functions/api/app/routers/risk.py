@@ -26,7 +26,7 @@ def get_risk_scores_api(db: Session = Depends(get_db)):
         District.DistrictName,
         func.substr(CaseMaster.CrimeRegisteredDate, 1, 7).label("month"),
         func.count(CaseMaster.CaseMasterID).label("cnt")
-    ).join(Unit, CaseMaster.UnitID == Unit.UnitID)\
+    ).join(Unit, CaseMaster.PoliceStationID == Unit.UnitID)\
      .join(District, Unit.DistrictID == District.DistrictID)\
      .group_by(District.DistrictName, "month").all()
 
