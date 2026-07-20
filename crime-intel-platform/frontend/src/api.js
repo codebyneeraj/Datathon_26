@@ -24,7 +24,7 @@ export class ApiError extends Error {
  * @param {RequestInit} [options] - Fetch request options
  * @returns {Promise<any>} Response JSON data
  */
-async function request(endpoint, options = {}) {
+async function request(endpoint, options = {}, _retries = 2) {
   const url = `${BASE_URL}${endpoint}`;
   
   const headers = {
@@ -38,24 +38,38 @@ async function request(endpoint, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, { ...options, headers });
-
-  if (!response.ok) {
-    let errorData = null;
+  let lastError;
+  for (let attempt = 0; attempt <= _retries; attempt++) {
     try {
-      errorData = await response.json();
-    } catch {
-      // JSON parsing failed (e.g. html error page)
-    }
-    
-    throw new ApiError(
-      errorData?.detail || response.statusText || 'An API error occurred',
-      response.status,
-      errorData
-    );
-  }
+      const response = await fetch(url, { ...options, headers });
 
-  return response.json();
+      if (!response.ok) {
+        let errorData = null;
+        try {
+          errorData = await response.json();
+        } catch {
+          // JSON parsing failed (e.g. html error page)
+        }
+        
+        throw new ApiError(
+          errorData?.detail || response.statusText || 'An API error occurred',
+          response.status,
+          errorData
+        );
+      }
+
+      return await response.json();
+    } catch (err) {
+      lastError = err;
+      // Only retry on network errors or JSON parse errors, not on API errors
+      if (err instanceof ApiError) throw err;
+      if (attempt < _retries) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+    }
+  }
+  throw lastError;
 }
 
 /**
